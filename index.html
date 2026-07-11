@@ -16,7 +16,10 @@
 <div class="app">
   <!-- Header -->
   <header class="header">
-    <h1>🍒奇妙浆果园</h1>
+    <div class="header-title">
+      <h1>Joseph的抽抽乐</h1>
+      <div class="header-subtitle">——🍒奇妙浆果园</div>
+    </div>
     <div class="header-btns">
       <button class="header-btn" onclick="exportData()">导出</button>
       <button class="header-btn" onclick="importData()">导入</button>
@@ -110,6 +113,8 @@
         <div style="margin-top:14px;padding:14px;background:var(--orange-50);border-radius:12px;font-size:12px;color:var(--brown-200);line-height:1.8;">
           <div style="font-weight:600;color:var(--brown-800);margin-bottom:4px;">💡 截图技巧</div>
           • 可一次选择多张截图，依次识别后结果累加<br>• 卡号格式：PR1、R3、SR2 等<br>• 识别结果每张卡有 ± 按钮调整数量<br>• 右侧提示「与奖品位一致」即可放心确认
+          <div style="margin-top:10px;font-weight:600;color:var(--brown-800);margin-bottom:6px;">📷 示例截图</div>
+          <img src="images/example.jpg" alt="示例截图" style="width:100%;border-radius:10px;border:1px solid var(--orange-200);">
         </div>
       </div>
 
@@ -130,13 +135,13 @@
   <!-- Bottom Tab Bar -->
   <nav class="tab-bar">
     <button class="tab-item active" data-tab="collection" onclick="switchTab('collection')">
-     我的收藏
+      <span class="tab-icon">📊</span>我的收藏
     </button>
     <button class="tab-item" data-tab="entry" onclick="switchTab('entry')">
-    录入
+      <span class="tab-icon">✍️</span>录入
     </button>
     <button class="tab-item" data-tab="history" onclick="switchTab('history')">
-     记录
+      <span class="tab-icon">📝</span>记录
     </button>
   </nav>
 </div>

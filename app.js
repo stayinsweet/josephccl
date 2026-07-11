@@ -381,6 +381,9 @@ function switchPool(pool) {
 }
 function switchTab(tab) {
   currentTab = tab;
+  // 切换页面时滚动到顶部
+  const content = document.getElementById('mainContent');
+  if (content) content.scrollTop = 0;
   document
     .querySelectorAll('.tab-page')
     .forEach(p => p.classList.remove('active'));
@@ -805,10 +808,10 @@ function renderBonus() {
       <div class="bn-cell">
         <div class="bn-cell-head"><span>全员满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('global')">详情</button></div>
         <div class="bn-cell-sub">已解锁 ${gUnlocked}/${GLOBAL_BONUS.length} · 全员 ${fmtWan(GLOBAL_TOTAL_DRAWS)}</div>
-        <div class="bn-note">每日24点更新</div>
         ${gCard}
       </div>
     </div>
+    <div class="bn-note">全员满赠数据每日24点更新</div>
   `;
 }
 
@@ -1959,13 +1962,25 @@ function closeFloatDraw(e) {
   const el = document.getElementById('floatDraw');
   if (!el) return;
   const STORAGE_KEY = 'ccg_float_pos';
-  // 恢复位置
+  // 恢复位置：有保存则用保存值，否则初始定位到「双池总抽数」卡右侧
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (saved && saved.left != null) {
       el.style.left = saved.left + 'px';
       el.style.top = saved.top + 'px';
       el.style.right = 'auto';
+    } else {
+      const ovCards = document.querySelectorAll('#overviewPanel .ov-card');
+      if (ovCards.length) {
+        const r = ovCards[0].getBoundingClientRect();
+        let left = r.right - el.offsetWidth - 4;
+        let top = r.top + (r.height - el.offsetHeight) / 2;
+        left = Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, left));
+        top = Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, top));
+        el.style.left = left + 'px';
+        el.style.top = top + 'px';
+        el.style.right = 'auto';
+      }
     }
   } catch (e) {}
 
