@@ -3,6 +3,7 @@
 const POOLS = {
   xiari: {
     name: '🏖️ 夏日池',
+    imgDir: 'images/夏日池',
     ranges: [
       ['日常卡', 'r', 1, 9],
       ['日常卡', 'pr', 1, 3],
@@ -15,9 +16,12 @@ const POOLS = {
       ['衣料卡', 'hr', 4, 4],
     ],
     specials: ['签名照', '晞咘咘', '泡泡玛特盲盒'],
+    // 特典名 → 图片文件名（不含扩展名）映射；未列出的同名取图片
+    specialImgs: { '签名照': '签名照', '晞咘咘': '棉花娃娃', '泡泡玛特盲盒': '泡泡玛特盲盒' },
   },
   junuan: {
     name: '🍊 橘暖池',
+    imgDir: 'images/橘暖池',
     ranges: [
       ['角色卡', 'r', 1, 14],
       ['角色卡', 'pr', 1, 9],
@@ -27,6 +31,7 @@ const POOLS = {
       ['未公开角色卡', 'ur', 1, 2],
     ],
     specials: ['未公开亲签拍立得', '阿玛尼手链', '阿玛尼墨镜', '安热沙防晒'],
+    specialImgs: { '未公开亲签拍立得': '拍立得', '阿玛尼手链': '手链', '阿玛尼墨镜': '眼镜', '安热沙防晒': '防晒' },
   },
 };
 
@@ -46,17 +51,34 @@ const RARITY_ORDER = ['r', 'pr', 'sr', 'ssr', 'sp', 'ur', 'hr', 'ex'];
 
 // 缓存：每池的卡牌数组 / id 列表 / 稀有度顺序 / 卡牌类型顺序
 const _poolCardsCache = {};
+// 橘暖池 png 扩展名的卡（其余编号卡为 jpg）
+const PNG_IDS = new Set(['r10', 'r11', 'r12', 'r13', 'r14']);
+// 编号卡图片路径：夏日池大写 .jpg，橘暖池小写（r10-14 为 png 其余 jpg）
+function numberedImgPath(pool, id) {
+  const dir = POOLS[pool].imgDir;
+  if (pool === 'xiari') return `${dir}/${id.toUpperCase()}.jpg`;
+  // junuan：小写，部分 png
+  const ext = PNG_IDS.has(id) ? 'png' : 'jpg';
+  return `${dir}/${id}.${ext}`;
+}
+// 特典卡图片路径
+function specialImgPath(pool, name) {
+  const def = POOLS[pool];
+  const file = (def.specialImgs && def.specialImgs[name]) || name;
+  return `${def.imgDir}/${file}.jpg`;
+}
 function poolCards(pool) {
   if (_poolCardsCache[pool]) return _poolCardsCache[pool];
   const def = POOLS[pool];
   const cards = [];
   for (const [type, rarity, start, end] of def.ranges) {
     for (let n = start; n <= end; n++) {
-      cards.push({ id: rarity + n, type, rarity, num: n, name: type });
+      const id = rarity + n;
+      cards.push({ id, type, rarity, num: n, name: type, img: numberedImgPath(pool, id) });
     }
   }
   def.specials.forEach((name, i) => {
-    cards.push({ id: 'ex' + (i + 1), type: '特典', rarity: 'ex', num: i + 1, name });
+    cards.push({ id: 'ex' + (i + 1), type: '特典', rarity: 'ex', num: i + 1, name, img: specialImgPath(pool, name) });
   });
   _poolCardsCache[pool] = cards;
   return cards;
@@ -541,11 +563,12 @@ function renderCollection() {
     html += g.cards.map(card => {
       const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
       const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
-      const imgHTML = imgs && imgs.front
-        ? `<img src="${imgs.front}" alt="${card.id}">`
+      const imgSrc = (imgs && imgs.front) || card.img;
+      const imgHTML = imgSrc
+        ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
         : `<span>${idText}</span>`;
       const nameText = card.rarity === 'ex' ? card.name : card.name;
-      return `<div class="card-cell ${card.rarity} ${card.count>0?'has':'zero'}" data-count="${c[card.id]||0}" onclick="openModal('${card.id}')">
+      return `<div class="card-cell ${card.rarity} ${(c[card.id]||0)>0?'has':'zero'}" data-count="${c[card.id]||0}" onclick="openModal('${card.id}')">
         <div class="placeholder">${imgHTML}</div>
         <div class="cid">${idText}</div>
         <div class="cname">${nameText}</div>
@@ -572,11 +595,14 @@ function openModal(id) {
   const front = document.getElementById('modalFront');
   front.className = 'modal-face front ' + card.rarity + '-face';
   const imgs = cardImages[currentPool] && cardImages[currentPool][id];
-  if (imgs && imgs.front) {
-    document.getElementById('modalFrontImg').src = imgs.front; document.getElementById('modalFrontImg').style.display='block';
+  const imgSrc = (imgs && imgs.front) || card.img;
+  const frontImg = document.getElementById('modalFrontImg');
+  if (imgSrc) {
+    frontImg.src = imgSrc; frontImg.style.display='block';
+    frontImg.onerror = function() { this.style.display='none'; document.getElementById('modalFrontPH').style.display='flex'; document.getElementById('modalFrontPH').textContent = card.rarity === 'ex' ? '🎁' : (RARITY_INFO[card.rarity].icon || '🃏'); };
     document.getElementById('modalFrontPH').style.display='none';
   } else {
-    document.getElementById('modalFrontImg').style.display='none';
+    frontImg.style.display='none';
     document.getElementById('modalFrontPH').style.display='block';
     document.getElementById('modalFrontPH').textContent = card.rarity === 'ex' ? '🎁' : (RARITY_INFO[card.rarity].icon || '🃏');
   }
@@ -996,46 +1022,86 @@ function renderEntry() {
   let groups;
   if (groupMode === 'rarity') {
     groups = poolRarities(currentPool).map(r => ({
+      key: r,
       title: `${RARITY_INFO[r].icon} ${RARITY_INFO[r].label}`,
       cls: r + '-title',
       cards: cards.filter(card => card.rarity === r),
     }));
   } else {
     groups = poolTypes(currentPool).map(t => ({
+      key: t,
       title: t,
       cls: 'type-title',
       cards: cards.filter(card => card.type === t),
     }));
     const exCards = cards.filter(card => card.rarity === 'ex');
-    if (exCards.length) groups.push({ title: '🎁 特典', cls: 'ex-title', cards: exCards });
+    if (exCards.length) groups.push({ key: 'ex', title: '🎁 特典', cls: 'ex-title', cards: exCards });
   }
 
   let html = '';
   for (const g of groups) {
     const total = g.cards.length;
     const collected = g.cards.filter(card => (c[card.id] || 0) > 0).length;
-    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}<span class="group-count">${collected}/${total}</span></div><div class="card-grid entry-grid">`;
-    html += g.cards.map(card => {
-      const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
-      const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
-      const imgHTML = imgs && imgs.front
-        ? `<img src="${imgs.front}" alt="${card.id}">`
-        : `<span>${idText}</span>`;
-      const cnt = c[card.id] || 0;
-      return `<div class="card-cell entry-cell ${card.rarity} ${cnt>0?'has':'zero'}">
-        <div class="placeholder">${imgHTML}</div>
-        <div class="cid">${idText}</div>
-        <div class="cname">${card.name}</div>
-        <div class="entry-ctrl">
-          <button class="entry-btn" onclick="adjustEntry('${card.id}', -1)">−</button>
-          <input class="entry-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${cnt}" data-id="${card.id}" onfocus="this.select()" onchange="setEntryCount('${card.id}', this.value)">
-          <button class="entry-btn" onclick="adjustEntry('${card.id}', 1)">+</button>
-        </div>
-      </div>`;
-    }).join('');
+    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}<span class="group-count" id="gcount-${g.key}">${collected}/${total}</span></div><div class="card-grid entry-grid">`;
+    html += g.cards.map(card => entryCellHTML(card, c)).join('');
     html += '</div></div>';
   }
   grid.innerHTML = html;
+}
+
+// 单张录入卡 HTML（key 用于 DOM id，便于局部更新）
+function entryCellHTML(card, c) {
+  const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
+  const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
+  const imgSrc = (imgs && imgs.front) || card.img;
+  const imgHTML = imgSrc
+    ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
+    : `<span>${idText}</span>`;
+  const cnt = c[card.id] || 0;
+  return `<div class="card-cell entry-cell ${card.rarity} ${cnt>0?'has':'zero'}" id="ecell-${card.id}">
+    <div class="placeholder">${imgHTML}</div>
+    <div class="cid">${idText}</div>
+    <div class="cname">${card.name}</div>
+    <div class="entry-ctrl">
+      <button class="entry-btn" onclick="adjustEntry('${card.id}', -1)">−</button>
+      <input class="entry-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${cnt}" data-id="${card.id}" onfocus="this.select()" onchange="setEntryCount('${card.id}', this.value)">
+      <button class="entry-btn" onclick="adjustEntry('${card.id}', 1)">+</button>
+    </div>
+  </div>`;
+}
+
+// 局部更新单张录入卡（不重建整网格，避免图片重载闪烁）
+function updateEntryCell(id) {
+  const cell = document.getElementById('ecell-' + id);
+  if (!cell) return;
+  const c = cardCounts[currentPool] || {};
+  const cnt = c[id] || 0;
+  cell.classList.toggle('has', cnt > 0);
+  cell.classList.toggle('zero', cnt === 0);
+  const input = cell.querySelector('.entry-input');
+  if (input && document.activeElement !== input) input.value = cnt;
+}
+
+// 局部更新某组收集进度 X/Y
+function updateGroupCount(key) {
+  const el = document.getElementById('gcount-' + key);
+  if (!el) return;
+  const c = cardCounts[currentPool] || {};
+  const cards = poolCards(currentPool);
+  let grp;
+  if (groupMode === 'rarity') {
+    grp = cards.filter(card => card.rarity === key);
+  } else {
+    grp = cards.filter(card => (card.rarity === 'ex' && key === 'ex') || card.type === key);
+  }
+  const collected = grp.filter(card => (c[card.id] || 0) > 0).length;
+  el.textContent = `${collected}/${grp.length}`;
+}
+
+// 找到某卡在当前分组模式下所属的 group key（用于局部更新组计数）
+function groupKeyOf(card) {
+  if (groupMode === 'rarity') return card.rarity;
+  return card.rarity === 'ex' ? 'ex' : card.type;
 }
 
 // 录入页卡片加减（直接修改数量，记录到 history）
@@ -1052,7 +1118,9 @@ function adjustEntry(id, delta) {
     history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type: 'adjust' });
   }
   saveData();
-  renderEntry();
+  // 局部更新：只改这一张卡 + 它所在组的计数，不重建整网格
+  updateEntryCell(id);
+  updateGroupCount(groupKeyOf(card));
   updateStats(); renderPanels();
   if (currentTab === 'history') renderHistory();
 }
@@ -1065,12 +1133,13 @@ function setEntryCount(id, val) {
   const cur = cardCounts[currentPool][id] || 0;
   let next = parseInt(val);
   if (isNaN(next) || next < 0) next = 0;
-  if (next === cur) { renderEntry(); return; } // 无变化
+  if (next === cur) { updateEntryCell(id); return; } // 无变化
   cardCounts[currentPool][id] = next;
   const type = next > cur ? 'manual' : 'adjust';
   history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type });
   saveData();
-  renderEntry();
+  updateEntryCell(id);
+  updateGroupCount(groupKeyOf(card));
   updateStats(); renderPanels();
   if (currentTab === 'history') renderHistory();
 }

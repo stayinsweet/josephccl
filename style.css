@@ -252,7 +252,7 @@ html, body {
 /* 录入页：横向滚动的卡片网格 */
 .entry-grid { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
 .entry-grid::-webkit-scrollbar { height: 0; }
-.entry-grid .entry-cell { flex: 0 0 auto; width: 92px; }
+.entry-grid .entry-cell { flex: 0 0 auto; width: 100px; }
 .card-cell {
   background: var(--white); border-radius: 12px; padding: 6px; text-align: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.04); position: relative; transition: transform 0.15s; cursor: pointer;
@@ -291,18 +291,19 @@ html, body {
 
 /* 录入页卡片加减控件 */
 .entry-cell.zero { opacity: 0.55; }
-.entry-ctrl { display: flex; align-items: center; justify-content: center; gap: 3px; margin-top: 4px; }
+.entry-ctrl { display: flex; align-items: center; justify-content: center; gap: 2px; margin-top: 4px; }
 .entry-btn {
-  width: 22px; height: 24px; border: none; border-radius: 7px; cursor: pointer;
-  background: var(--orange-100); color: var(--orange-600); font-size: 16px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; transition: all 0.12s; font-family: inherit; flex-shrink: 0;
+  width: 28px; height: 28px; border: none; border-radius: 8px; cursor: pointer;
+  background: var(--orange-100); color: var(--orange-600); font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; transition: background 0.12s; font-family: inherit; flex-shrink: 0;
+  line-height: 1; padding: 0; position: relative;
 }
-.entry-btn:active { transform: scale(0.85); background: var(--orange-200); }
+.entry-btn:active { background: var(--orange-200); }
 .entry-input {
-  width: 30px; height: 24px; text-align: center; font-size: 13px; font-weight: 800;
+  width: 28px; height: 28px; text-align: center; font-size: 14px; font-weight: 800;
   color: var(--brown-900); border: 1.5px solid var(--orange-200); border-radius: 6px;
   background: var(--white); font-family: inherit; -webkit-user-select: text; user-select: text;
-  padding: 0;
+  padding: 0; flex-shrink: 0;
 }
 .entry-input:focus { outline: none; border-color: var(--orange-500); }
 
