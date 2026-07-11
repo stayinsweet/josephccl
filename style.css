@@ -404,15 +404,26 @@ html, body {
 .ocr-title { font-size: 13px; color: var(--brown-800); margin-bottom: 8px; font-weight: 600; }
 .ocr-loading { text-align: center; padding: 16px; display: none; }
 @keyframes pulse { 0%,100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
-.ocr-nums { display: flex; flex-wrap: wrap; gap: 8px; }
-.ocr-chip {
-  background: var(--white); border: 2px solid var(--orange-300); border-radius: 10px;
-  padding: 8px 12px; font-size: 13px; font-weight: 700; color: var(--orange-700);
-  cursor: pointer; transition: all 0.15s; text-transform: uppercase;
+.ocr-pool-label { font-size: 13px; font-weight: 700; color: var(--orange-600); margin-bottom: 10px; }
+.ocr-group-title { font-size: 11px; font-weight: 600; color: var(--brown-200); margin: 10px 0 6px; }
+.ocr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
+.ocr-cell {
+  background: var(--white); border: 1.5px solid var(--orange-200); border-radius: 8px;
+  padding: 6px 4px; text-align: center; cursor: pointer; transition: all 0.12s;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
 }
-.ocr-chip.selected { background: var(--orange-500); color: white; border-color: var(--orange-500); }
-.ocr-chip:active { transform: scale(0.93); }
-.ocr-adj-btn:active { transform: scale(0.85); background: var(--orange-200) !important; }
+.ocr-cell:active { transform: scale(0.93); }
+.ocr-cell.has { border-color: var(--orange-400); background: var(--orange-50); cursor: default; }
+.ocr-cell-id { font-size: 12px; font-weight: 800; color: var(--brown-900); text-transform: uppercase; }
+.ocr-cell:not(.has) .ocr-cell-id { color: var(--brown-200); }
+.ocr-cell-ctrl { display: flex; align-items: center; gap: 4px; }
+.ocr-adj-btn {
+  width: 22px; height: 22px; border: none; border-radius: 6px; cursor: pointer;
+  background: var(--orange-100); color: var(--orange-600); font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-family: inherit;
+}
+.ocr-adj-btn:active { transform: scale(0.85); background: var(--orange-200); }
+.ocr-cell-cnt { min-width: 16px; text-align: center; font-size: 14px; font-weight: 800; color: var(--orange-600); }
 .btn-row { display: flex; gap: 10px; }
 
 /* History */

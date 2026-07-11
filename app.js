@@ -1184,6 +1184,90 @@ async function getWorker() {
   return w;
 }
 
+// 通过文本里的卡牌类型名判断属于哪个池
+function detectPool(text) {
+  const xiariTypes = ['日常卡', '音乐卡', '涂鸦卡', '路透卡', '拍立得', '镂空卡', '衣料卡'];
+  const junuanTypes = ['角色卡', '拼图卡', '月历卡', '工艺卡', '未公开角色卡'];
+  let xiariHits = 0, junuanHits = 0;
+  for (const t of xiariTypes) {
+    let i = 0;
+    while ((i = text.indexOf(t, i)) !== -1) { xiariHits++; i += t.length; }
+  }
+  for (const t of junuanTypes) {
+    let i = 0;
+    while ((i = text.indexOf(t, i)) !== -1) { junuanHits++; i += t.length; }
+  }
+  if (xiariHits > junuanHits) return 'xiari';
+  if (junuanHits > xiariHits) return 'junuan';
+  return null; // 无法判断
+}
+
+// 对单段文本跑 4 策略匹配，返回 {id: count}（每卡取各策略最大值）
+function matchCardCounts(text, words, validIDs) {
+  const results = [];
+  // 策略A：中文卡名 + 数字
+  const cntA = {};
+  for (const { pattern, cat } of CN_CARD_PATTERNS) {
+    let m; pattern.lastIndex = 0;
+    while ((m = pattern.exec(text)) !== null) {
+      const id = cat + parseInt(m[1]);
+      if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
+    }
+  }
+  results.push(cntA);
+  // 策略B：英文缩写 + 数字
+  const cntB = {};
+  const enPatterns = [
+    /\b(pr|PR|Pr)\s*(\d{1,2})\b/g, /\b(sr|SR|Sr)\s*(\d{1,2})\b/g,
+    /\b(ssr|SSR|Ssr)\s*(\d{1,2})\b/g, /\b(ur|UR|Ur)\s*(\d{1,2})\b/g,
+    /\b(hr|HR|Hr)\s*(\d{1,2})\b/g, /\b(sp|SP|Sp)\s*(\d{1,2})\b/g,
+    /\b(r|R)\s*(\d{1,2})\b/g,
+  ];
+  for (const pat of enPatterns) {
+    let m; pat.lastIndex = 0;
+    while ((m = pat.exec(text)) !== null) {
+      const id = m[1].toLowerCase() + parseInt(m[2]);
+      if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
+    }
+  }
+  results.push(cntB);
+  // 策略C：单词级（置信度 > 40）
+  const cntC = {};
+  if (words) {
+    for (const w of words) {
+      if (w.confidence < 40) continue;
+      const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (validIDs.has(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
+    }
+  }
+  results.push(cntC);
+  // 策略D：中文宽松匹配
+  const cntD = {};
+  const compact = text.replace(/[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g, '');
+  for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
+    if (cnName.length < 2) continue;
+    let idx = 0;
+    while ((idx = compact.indexOf(cnName, idx)) !== -1) {
+      const after = compact.slice(idx + cnName.length, idx + cnName.length + 3);
+      const numMatch = after.match(/^(\d{1,2})/);
+      if (numMatch) {
+        const id = cat + parseInt(numMatch[1]);
+        if (validIDs.has(id)) cntD[id] = (cntD[id] || 0) + 1;
+      }
+      idx += cnName.length;
+    }
+  }
+  results.push(cntD);
+  // 每卡取各策略最大值
+  const out = {};
+  for (const id of validIDs) {
+    let mx = 0;
+    for (const r of results) if (r[id] && r[id] > mx) mx = r[id];
+    if (mx > 0) out[id] = mx;
+  }
+  return out;
+}
+
 async function handleScreenshots(event) {
   const files = Array.from(event.target.files);
   if (files.length === 0) return;
@@ -1202,7 +1286,7 @@ async function handleScreenshots(event) {
   const accumulated = {};
   let grandExpected = 0;
   const allDebug = [];
-  const validIDs = new Set(poolIDs(currentPool)); // 仅匹配当前池
+  let detectedPool = null; // 自动判断的池（第一张图确定后切换）
 
   for (let fi = 0; fi < files.length; fi++) {
     const file = files[fi];
@@ -1247,78 +1331,19 @@ async function handleScreenshots(event) {
             allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
           );
 
-          // 每个策略独立计数，最后取最大值（避免重复计数）
-          const strategyResults = [];
-
-          // === 策略A：匹配中文卡名 + 数字（最可靠）===
-          const cntA = {};
-          for (const { pattern, cat } of CN_CARD_PATTERNS) {
-            let m;
-            pattern.lastIndex = 0;
-            while ((m = pattern.exec(fullText)) !== null) {
-              const num = parseInt(m[1]);
-              const id = cat + num;
-              if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
+          // 判断本张图属于哪个池，动态取有效卡 id（以第一张判出的池为准）
+          if (!detectedPool) {
+            detectedPool = detectPool(fullText) || currentPool;
+            if (detectedPool !== currentPool) {
+              switchPool(detectedPool); // 自动切换到识别出的池
             }
           }
-          strategyResults.push(cntA);
+          const validIDs = new Set(poolIDs(detectedPool));
 
-          // === 策略B：匹配英文缩写 PR1, R3, SR2 等（加 \b 词边界避免 SSR 内部匹配 SR）===
-          const cntB = {};
-          const enPatterns = [
-            /\b(pr|PR|Pr)\s*(\d{1,2})\b/g,
-            /\b(sr|SR|Sr)\s*(\d{1,2})\b/g,
-            /\b(ssr|SSR|Ssr)\s*(\d{1,2})\b/g,
-            /\b(ur|UR|Ur)\s*(\d{1,2})\b/g,
-            /\b(hr|HR|Hr)\s*(\d{1,2})\b/g,
-            /\b(sp|SP|Sp)\s*(\d{1,2})\b/g,
-            /\b(r|R)\s*(\d{1,2})\b/g,
-          ];
-          for (const pat of enPatterns) {
-            let m;
-            pat.lastIndex = 0;
-            while ((m = pat.exec(fullText)) !== null) {
-              const cat = m[1].toLowerCase();
-              const num = parseInt(m[2]);
-              const id = cat + num;
-              if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
-            }
-          }
-          strategyResults.push(cntB);
-
-          // === 策略C：单词级（置信度 > 40）===
-          const cntC = {};
-          for (const w of allWords) {
-            if (w.confidence < 40) continue;
-            const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (validIDs.has(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
-          }
-          strategyResults.push(cntC);
-
-          // === 策略D：中文宽松匹配（仅中文卡名，避免英文缩写子串误匹配）===
-          const cntD = {};
-          const compact = fullText.replace(
-            /[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g,
-            '',
-          );
-          for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
-            if (cnName.length < 2) continue;
-            let idx = 0;
-            while ((idx = compact.indexOf(cnName, idx)) !== -1) {
-              const after = compact.slice(
-                idx + cnName.length,
-                idx + cnName.length + 3,
-              );
-              const numMatch = after.match(/^(\d{1,2})/);
-              if (numMatch) {
-                const num = parseInt(numMatch[1]);
-                const id = cat + num;
-                if (validIDs.has(id)) cntD[id] = (cntD[id] || 0) + 1;
-              }
-              idx += cnName.length;
-            }
-          }
-          strategyResults.push(cntD);
+          // 两轮分别匹配，每张卡取两轮中的最大值（避免拼接文本导致重复计数）
+          const cnt1 = matchCardCounts(ret1.data.text, ret1.data.words, validIDs);
+          const cnt2 = matchCardCounts(ret2.data.text, ret2.data.words, validIDs);
+          const strategyResults = [cnt1, cnt2];
 
           // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
           let expectedTotal = 0;
@@ -1408,41 +1433,36 @@ async function handleScreenshots(event) {
 function renderOCR() {
   const container = document.getElementById('ocrNumbers');
 
-  // 按稀有度动态分组（仅当前池，不含特典）
-  const order = poolRarities(currentPool)
-    .filter(r => r !== 'ex')
-    .map(r => ({
-      rarity: r,
-      icon: RARITY_INFO[r].icon,
-      label: RARITY_INFO[r].label,
-      ids: poolCards(currentPool)
-        .filter(c => c.rarity === r)
-        .map(c => c.id),
-    }));
-
   let totalSelected = 0;
   let html = '';
+  // 顶部显示所属卡池
+  html += `<div class="ocr-pool-label">${POOLS[currentPool].name}</div>`;
 
-  for (const group of order) {
-    html += `<div style="font-size:11px;color:var(--brown-200);margin:6px 0 2px;">${group.icon} ${group.label}</div>`;
-    html +=
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">';
+  // 按卡牌类型分组（不含特典）
+  const typeOrder = poolTypes(currentPool).map(t => ({
+    type: t,
+    ids: poolCards(currentPool).filter(c => c.type === t && c.rarity !== 'ex').map(c => c.id),
+  }));
+
+  for (const group of typeOrder) {
+    html += `<div class="ocr-group-title">${group.type}</div>`;
+    html += '<div class="ocr-grid">';
     for (const id of group.ids) {
       const detected = ocrCounts[id] || 0;
       const selected = ocrSelected[id] || 0;
       totalSelected += selected;
-
-      if (detected > 0 || selected > 0) {
-        // 有检测到或被手动选中的卡：显示计数调节器
-        html += `<div style="display:flex;align-items:center;gap:2px;background:var(--white);border-radius:12px;padding:3px 4px 3px 10px;border:2px solid var(--orange-300);">
-          <span style="font-weight:700;font-size:13px;text-transform:uppercase;min-width:28px;">${id}</span>
-          <button class="ocr-adj-btn" onclick="adjustOCR('${id}', -1)" style="width:28px;height:28px;border:none;border-radius:8px;background:var(--orange-50);font-size:18px;font-weight:700;color:var(--orange-600);cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
-          <span style="min-width:18px;text-align:center;font-weight:800;font-size:15px;color:${selected > 0 ? 'var(--orange-600)' : 'var(--brown-200)'};">${selected}</span>
-          <button class="ocr-adj-btn" onclick="adjustOCR('${id}', 1)" style="width:28px;height:28px;border:none;border-radius:8px;background:var(--orange-100);font-size:18px;font-weight:700;color:var(--orange-600);cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
+      const active = detected > 0 || selected > 0;
+      if (active) {
+        html += `<div class="ocr-cell has">
+          <span class="ocr-cell-id">${id.toUpperCase()}</span>
+          <div class="ocr-cell-ctrl">
+            <button class="ocr-adj-btn" onclick="adjustOCR('${id}', -1)">−</button>
+            <span class="ocr-cell-cnt">${selected}</span>
+            <button class="ocr-adj-btn" onclick="adjustOCR('${id}', 1)">+</button>
+          </div>
         </div>`;
       } else {
-        // 没检测到的卡：显示为可点击添加的小标签
-        html += `<span class="ocr-chip" onclick="adjustOCR('${id}', 1)" style="opacity:0.5;">${id.toUpperCase()}</span>`;
+        html += `<div class="ocr-cell" onclick="adjustOCR('${id}', 1)"><span class="ocr-cell-id">${id.toUpperCase()}</span></div>`;
       }
     }
     html += '</div>';
