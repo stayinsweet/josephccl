@@ -247,7 +247,7 @@ html, body {
 .rarity-title.sp-title { color: #2E9088; }
 .rarity-title.ex-title { color: #B06038; }
 .rarity-title.type-title { color: var(--orange-700); }
-.card-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 
 /* 录入页：横向滚动的卡片网格 */
 .entry-grid { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
@@ -366,14 +366,24 @@ html, body {
 .modal-sheet {
   background: var(--white); border-radius: 24px 24px 0 0; width: 100%; max-width: 480px;
   max-height: 80vh; overflow-y: auto; padding: 20px; animation: slideUp 0.3s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
 }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .modal-handle { width: 36px; height: 5px; background: var(--orange-200); border-radius: 3px; margin: 0 auto 16px; }
-.modal-card-preview { display: flex; gap: 12px; margin-bottom: 16px; }
-.modal-face {
-  flex: 1; aspect-ratio: 0.72; border-radius: 12px; display: flex; align-items: center;
-  justify-content: center; font-size: 24px; font-weight: 800; color: white; position: relative; overflow: hidden;
+.modal-close {
+  position: absolute; top: 12px; right: 14px; width: 30px; height: 30px; border: none;
+  border-radius: 50%; background: var(--orange-100); color: var(--orange-600); font-size: 15px;
+  font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  z-index: 5; font-family: inherit;
 }
+.modal-close:active { background: var(--orange-200); transform: scale(0.9); }
+.modal-card-preview { display: flex; justify-content: center; gap: 12px; margin-bottom: 16px; }
+.modal-face {
+  flex: 0 0 auto; max-width: 260px; border-radius: 12px; display: flex; align-items: center;
+  justify-content: center; font-size: 24px; font-weight: 800; color: white; position: relative; overflow: hidden;
+  min-height: 80px; min-width: 80px;
+}
+.modal-face img { position: static; width: 100%; height: auto; max-height: 60vh; object-fit: contain; display: block; }
 .modal-face.front.r-face { background: linear-gradient(135deg, #B0C8E8, #6B8EC8); }
 .modal-face.front.pr-face { background: linear-gradient(135deg, #F0D060, #D4A820); }
 .modal-face.front.sr-face { background: linear-gradient(135deg, #E0B8E8, #C878D0); }
@@ -382,8 +392,6 @@ html, body {
 .modal-face.front.hr-face { background: linear-gradient(135deg, #C0DCA0, #8AB860); }
 .modal-face.front.sp-face { background: linear-gradient(135deg, #A8E0DC, #50B8B0); }
 .modal-face.front.ex-face { background: linear-gradient(135deg, #F0C8B0, #D07850); }
-.modal-face.back { background: linear-gradient(135deg, var(--orange-200), var(--orange-400)); }
-.modal-face img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; }
 .modal-info { text-align: center; margin-bottom: 16px; }
 .modal-info .modal-cid { font-size: 30px; font-weight: 800; color: var(--brown-900); text-transform: uppercase; }
 .modal-info .modal-name { font-size: 18px; font-weight: 600; color: var(--brown-800); margin: 4px 0; }

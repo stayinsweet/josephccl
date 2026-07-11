@@ -143,10 +143,10 @@
 <!-- Card Detail Modal -->
 <div class="modal-overlay" id="cardModal" style="display:none;" onclick="if(event.target===this)closeModal()">
   <div class="modal-sheet">
+    <button class="modal-close" onclick="closeModal()">✕</button>
     <div class="modal-handle"></div>
     <div class="modal-card-preview">
       <div class="modal-face front" id="modalFront"><span id="modalFrontPH">🃏</span><img id="modalFrontImg" src="" style="display:none;"></div>
-      <div class="modal-face back" id="modalBack"><span id="modalBackPH">🎴</span><img id="modalBackImg" src="" style="display:none;"></div>
     </div>
     <div class="modal-info">
       <div class="modal-cid" id="modalCid">pr1</div>
@@ -154,7 +154,6 @@
       <div class="modal-rarity" id="modalRarity">PR</div>
       <div class="modal-count-line">持有 <span id="modalCount">0</span> 张</div>
     </div>
-    <button class="btn btn-outline" style="width:100%;" onclick="closeModal()">关闭</button>
   </div>
 </div>
 

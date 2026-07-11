@@ -53,11 +53,9 @@ const RARITY_ORDER = ['r', 'pr', 'sr', 'ssr', 'sp', 'ur', 'hr', 'ex'];
 const _poolCardsCache = {};
 // 橘暖池 png 扩展名的卡（其余编号卡为 jpg）
 const PNG_IDS = new Set(['r10', 'r11', 'r12', 'r13', 'r14']);
-// 编号卡图片路径：夏日池大写 .jpg，橘暖池小写（r10-14 为 png 其余 jpg）
+// 编号卡图片路径：两池统一小写（橘暖池 r10-14 为 png 其余 jpg）
 function numberedImgPath(pool, id) {
   const dir = POOLS[pool].imgDir;
-  if (pool === 'xiari') return `${dir}/${id.toUpperCase()}.jpg`;
-  // junuan：小写，部分 png
   const ext = PNG_IDS.has(id) ? 'png' : 'jpg';
   return `${dir}/${id}.${ext}`;
 }
@@ -605,13 +603,6 @@ function openModal(id) {
     frontImg.style.display='none';
     document.getElementById('modalFrontPH').style.display='block';
     document.getElementById('modalFrontPH').textContent = card.rarity === 'ex' ? '🎁' : (RARITY_INFO[card.rarity].icon || '🃏');
-  }
-  if (imgs && imgs.back) {
-    document.getElementById('modalBackImg').src = imgs.back; document.getElementById('modalBackImg').style.display='block';
-    document.getElementById('modalBackPH').style.display='none';
-  } else {
-    document.getElementById('modalBackImg').style.display='none';
-    document.getElementById('modalBackPH').style.display='block';
   }
   document.getElementById('cardModal').style.display = 'flex';
 }
