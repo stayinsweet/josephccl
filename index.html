@@ -17,10 +17,10 @@
   <!-- Header -->
   <header class="header">
     <h1>🍒奇妙浆果园</h1>
-    <div style="display:flex;gap:4px;">
-      <button class="btn btn-sm btn-white" onclick="exportData()">💾</button>
-      <button class="btn btn-sm btn-white" onclick="importData()">📥</button>
-      <button class="btn btn-sm btn-white" onclick="clearAllData()">🗑</button>
+    <div class="header-btns">
+      <button class="header-btn" onclick="exportData()">导出</button>
+      <button class="header-btn" onclick="importData()">导入</button>
+      <button class="header-btn danger" onclick="clearAllData()">清空</button>
     </div>
   </header>
 
@@ -45,7 +45,8 @@
           </div>
           <div class="group-menu" id="groupMenu" style="display:none;">
             <button class="group-icon-btn" id="groupIconBtn" onclick="toggleGroupMenu(event)" title="切换分组方式">
-              <span id="groupIconLabel">🏷️</span>
+              <svg class="group-icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+              <span id="groupIconLabel">卡牌类型</span>
             </button>
             <div class="group-dropdown" id="groupDropdown">
               <div class="group-option active" data-group="type" onclick="setGroupMode('type')">🏷️ 按卡牌类型</div>
@@ -159,7 +160,7 @@
       <div class="modal-cid" id="modalCid">pr1</div>
       <div class="modal-name" id="modalName">卡名</div>
       <div class="modal-rarity" id="modalRarity">PR</div>
-      <div class="modal-count-line">持有 <span id="modalCount">0</span> 张</div>
+      <div class="modal-count-line" id="modalCountLine">持有 <span id="modalCount">0</span> 张</div>
     </div>
   </div>
 </div>
@@ -182,6 +183,19 @@
     <div class="bonus-modal-title" id="extraModalTitle"></div>
     <div id="extraModalBody"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmExtraModal()">✅ 确认</button>
+  </div>
+</div>
+
+<!-- 总览 Modal（拥有 / 未拥有 页签） -->
+<div class="modal-overlay" id="overviewModal" style="display:none;" onclick="if(event.target===this)closeOverviewModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeOverviewModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="overview-tabs">
+      <button class="overview-tab active" data-otab="owned" onclick="switchOvTab('owned')">✅ 拥有</button>
+      <button class="overview-tab" data-otab="missing" onclick="switchOvTab('missing')">🔒 未拥有</button>
+    </div>
+    <div id="overviewBody"></div>
   </div>
 </div>
 

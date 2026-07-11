@@ -52,7 +52,7 @@ const RARITY_INFO = {
   ur: { label: 'UR', icon: '🏆' },
   hr: { label: 'HR', icon: '🎴' },
   sp: { label: 'SP', icon: '✨' },
-  ex: { label: '特典', icon: '🎁' },
+  ex: { label: '特殊奖励', icon: '🎁' },
 };
 
 // 稳定渲染顺序
@@ -94,7 +94,7 @@ function poolCards(pool) {
   def.specials.forEach((name, i) => {
     cards.push({
       id: 'ex' + (i + 1),
-      type: '特典',
+      type: '特殊奖励',
       rarity: 'ex',
       num: i + 1,
       name,
@@ -193,9 +193,11 @@ const REWARD_IMGS = {
   宣传卡: '宣传',
 };
 function rewardImg(name) {
-  const dir = name.startsWith('特典') ? '全员满赠'
-    : (name.startsWith('限时') || name.startsWith('宣传')) ? '额外奖励'
-    : '个人满赠';
+  const dir = name.startsWith('特典')
+    ? '全员满赠'
+    : name.startsWith('限时') || name.startsWith('宣传')
+      ? '额外奖励'
+      : '个人满赠';
   return `images/${dir}/${REWARD_IMGS[name] || name}.jpg`;
 }
 
@@ -230,7 +232,11 @@ function loadData() {
     cardCounts = d.cardCounts || { xiari: {}, junuan: {} };
     history = d.history || [];
     cardImages = d.cardImages || { xiari: {}, junuan: {} };
-    extraRewards = d.extraRewards || { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
+    extraRewards = d.extraRewards || {
+      限时时段: null,
+      宣传达标: false,
+      宣传下单时间: '',
+    };
   } catch (e) {}
   // 迁移：删除新卡池中不存在的旧 id（如旧 xiari 的 r9/r10/r11）
   for (const pool of ['xiari', 'junuan']) {
@@ -250,7 +256,13 @@ function loadData() {
 function saveData() {
   localStorage.setItem(
     'ccg2_data',
-    JSON.stringify({ cardCounts, history, cardImages, extraRewards, version: 3 }),
+    JSON.stringify({
+      cardCounts,
+      history,
+      cardImages,
+      extraRewards,
+      version: 3,
+    }),
   );
 }
 
@@ -328,15 +340,33 @@ function globalUnlockedCount() {
 function limitedUnlocked(name) {
   const t = extraRewards.限时时段;
   if (!t) return false;
-  const set = t === '0-2' ? ['限时卡1', '限时卡2', '限时卡3']
-    : t === '3-6' ? ['限时卡1', '限时卡2']
-    : t === '7-24' ? ['限时卡3'] : [];
+  const set =
+    t === '0-2'
+      ? ['限时卡1', '限时卡2', '限时卡3']
+      : t === '3-6'
+        ? ['限时卡1', '限时卡2']
+        : t === '7-24'
+          ? ['限时卡3']
+          : [];
   return set.includes(name);
 }
 // 宣传卡是否解锁（有抽卡记录 + 用户自勾达标）
 function promoUnlocked() {
   return totalDraws() > 0 && !!extraRewards.宣传达标;
 }
+// 限时礼已解锁卡数（0/2/3）
+function limitedUnlockedCount() {
+  const t = extraRewards.限时时段;
+  if (t === '0-2') return 3;
+  if (t === '3-6') return 2;
+  if (t === '7-24') return 1;
+  return 0;
+}
+// 额外奖励已解锁总数（限时 + 宣传）
+function extraUnlockedCount() {
+  return limitedUnlockedCount() + (promoUnlocked() ? 1 : 0);
+}
+const EXTRA_TOTAL = 4; // 限时3 + 宣传1
 
 // ==================== POOL & TAB ====================
 function switchPool(pool) {
@@ -472,8 +502,8 @@ function renderRewardPool() {
         const img = rewardImg(c.name);
         const phHTML = c.unlocked
           ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
-          : `<span class="reward-ph">🔒</span>`;
-        return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}">
+          : `<img src="${img}" alt="${c.name}" class="locked-img"><span class="reward-ph locked-emoji">🔒</span>`;
+        return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}" onclick="openRewardModal('${c.name}','${title.replace(/'/g, '')}','${c.tier}',${c.unlocked})">
         <div class="reward-ph-wrap">${phHTML}</div>
         <div class="reward-name">${c.name}</div>
         <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
@@ -491,9 +521,21 @@ function renderRewardPool() {
 
   // 限时礼 / 宣传礼（带确认按钮的分组）
   const limitedCards = [
-    { name: '限时卡1', tier: '0-2h / 3-6h', unlocked: limitedUnlocked('限时卡1') },
-    { name: '限时卡2', tier: '0-2h / 3-6h', unlocked: limitedUnlocked('限时卡2') },
-    { name: '限时卡3', tier: '0-2h / 7-24h', unlocked: limitedUnlocked('限时卡3') },
+    {
+      name: '限时卡1',
+      tier: '0-2h / 3-6h',
+      unlocked: limitedUnlocked('限时卡1'),
+    },
+    {
+      name: '限时卡2',
+      tier: '0-2h / 3-6h',
+      unlocked: limitedUnlocked('限时卡2'),
+    },
+    {
+      name: '限时卡3',
+      tier: '0-2h / 7-24h',
+      unlocked: limitedUnlocked('限时卡3'),
+    },
   ];
   const promoCards = [
     { name: '宣传卡', tier: '达标+有记录', unlocked: promoUnlocked() },
@@ -503,31 +545,40 @@ function renderRewardPool() {
   const lConfirmed = !!extraRewards.限时时段;
   const rConfirmed = !!extraRewards.宣传达标;
 
-  const renderConfirmGroup = (title, sub, cards, colorClass, confirmed, onConfirm) => `
+  const renderConfirmGroup = (
+    title,
+    sub,
+    cards,
+    colorClass,
+    confirmed,
+    onConfirm,
+  ) => `
     <div class="reward-group">
       <div class="reward-group-head">
         <span>${title}</span>
         <button class="reward-confirm-btn${confirmed ? ' done' : ''}" onclick="${onConfirm}">${confirmed ? '已确认 ✓' : '去确认'}</button>
       </div>
-      <div class="reward-grid">${cards.map(c => {
-        const img = rewardImg(c.name);
-        const phHTML = c.unlocked
-          ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
-          : `<span class="reward-ph">🔒</span>`;
-        return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}">
+      <div class="reward-grid">${cards
+        .map(c => {
+          const img = rewardImg(c.name);
+          const phHTML = c.unlocked
+            ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
+            : `<img src="${img}" alt="${c.name}" class="locked-img"><span class="reward-ph locked-emoji">🔒</span>`;
+          return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}" onclick="openRewardModal('${c.name}','${title.replace(/'/g, '').replace(/🍏|🍉/g,'').trim()}','${c.tier}',${c.unlocked})">
           <div class="reward-ph-wrap">${phHTML}</div>
           <div class="reward-name">${c.name}</div>
           <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
         </div>`;
-      }).join('')}</div>
+        })
+        .join('')}</div>
     </div>`;
 
   panel.innerHTML = `
-    <div class="panel-title">🏆 奖励卡池 <span class="panel-sub">满赠自动解锁，不可手动加减</span></div>
-    ${renderGroup('🎁 个人满赠', `${pUnlocked}/${PERSONAL_BONUS_TOTAL}`, personalCards, 'rw-personal')}
-    ${renderGroup('🌍 全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
-    ${renderConfirmGroup('🍏 限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
-    ${renderConfirmGroup('🍉 宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
+    <div class="panel-title"><span class="title-bar"></span>奖励卡池 <span class="panel-sub">满赠自动解锁，不可手动加减</span></div>
+    ${renderGroup('个人满赠', `${pUnlocked}/${PERSONAL_BONUS_TOTAL}`, personalCards, 'rw-personal')}
+    ${renderGroup('全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
+    ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
+    ${renderConfirmGroup('宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
   `;
 }
 
@@ -538,14 +589,14 @@ function renderOverview() {
   const total = totalDraws();
   const collected = collectedCount();
   const poolTotal = poolTotalCount();
-  const rewardUnlocked = personalUnlockedCount() + globalUnlockedCount();
-  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length; // 18 + 7 = 25
+  const rewardUnlocked = personalUnlockedCount() + globalUnlockedCount() + extraUnlockedCount();
+  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length + EXTRA_TOTAL; // 18 + 7 + 4 = 29
 
   const poolPct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
   const rewardPct = Math.round((rewardUnlocked / rewardTotal) * 100);
 
   panel.innerHTML = `
-    <div class="panel-title">📊 总统计</div>
+    <div class="panel-title"><span class="title-bar"></span>总统计<button class="overview-btn" onclick="openOverviewModal()">📋 总览</button></div>
     <div class="overview-grid">
       <div class="ov-card">
         <div class="ov-label">双池总抽数</div>
@@ -556,16 +607,76 @@ function renderOverview() {
         <div class="ov-num">${collected}<span class="ov-slash">/${poolTotal}</span></div>
         <div class="ov-bar-wrap"><div class="ov-bar" style="width:${poolPct}%"></div></div>
         <div class="ov-pct">${poolPct}%</div>
+        <div class="ov-note">不含特殊奖励</div>
       </div>
       <div class="ov-card">
         <div class="ov-label">奖励卡池总进度</div>
         <div class="ov-num">${rewardUnlocked}<span class="ov-slash">/${rewardTotal}</span></div>
         <div class="ov-bar-wrap"><div class="ov-bar reward" style="width:${rewardPct}%"></div></div>
         <div class="ov-pct">${rewardPct}%</div>
-        <div class="ov-note">仅含满赠，限时/宣传礼另计</div>
+        <div class="ov-note">含满赠 + 限时礼 + 宣传礼</div>
       </div>
     </div>
   `;
+}
+
+// ==================== OVERVIEW MODAL (总览弹窗) ====================
+let overviewTab = 'owned';
+// 汇总所有展示卡：双池普通卡(不含ex) + 奖励卡
+function overviewCards() {
+  const list = [];
+  // 双池普通卡（不含特典）
+  for (const pool of ['xiari', 'junuan']) {
+    const c = cardCounts[pool] || {};
+    for (const card of poolCards(pool)) {
+      if (card.rarity === 'ex') continue;
+      list.push({ name: card.name, img: card.img, owned: (c[card.id] || 0) > 0, sub: POOLS[pool].name });
+    }
+  }
+  // 奖励卡（个人满赠）
+  PERSONAL_BONUS.forEach(m => {
+    m.rewards.forEach(name => list.push({ name, img: rewardImg(name), owned: personalTierUnlocked(m), sub: '个人满赠' }));
+  });
+  // 全员满赠
+  const personalEligible = totalDraws() > GLOBAL_PERSONAL_MIN;
+  GLOBAL_BONUS.forEach(m => {
+    list.push({ name: m.card, img: rewardImg(m.card), owned: GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible, sub: '全员满赠' });
+  });
+  // 限时礼
+  ['限时卡1', '限时卡2', '限时卡3'].forEach(name => list.push({ name, img: rewardImg(name), owned: limitedUnlocked(name), sub: '限时礼' }));
+  // 宣传礼
+  list.push({ name: '宣传卡', img: rewardImg('宣传卡'), owned: promoUnlocked(), sub: '宣传礼' });
+  return list;
+}
+
+function renderOverviewTab() {
+  const body = document.getElementById('overviewBody');
+  if (!body) return;
+  const all = overviewCards();
+  const filtered = overviewTab === 'owned' ? all.filter(c => c.owned) : all.filter(c => !c.owned);
+  const cells = filtered.map(c => `
+    <div class="ov-card-cell">
+      <div class="ov-card-img-wrap"><img src="${c.img}" alt="${c.name}" onerror="this.style.display='none'"></div>
+      <div class="ov-card-name">${c.name}</div>
+      <div class="ov-card-sub">${c.sub}</div>
+    </div>`).join('');
+  body.innerHTML = `<div class="ov-count">${overviewTab === 'owned' ? '✅ 已拥有' : '🔒 未拥有'} ${filtered.length} 张</div>
+    <div class="ov-grid">${filtered.length ? cells : '<div style="text-align:center;color:var(--brown-200);padding:30px;grid-column:1/-1;">暂无</div>'}</div>`;
+}
+
+function openOverviewModal() {
+  overviewTab = 'owned';
+  document.querySelectorAll('.overview-tab').forEach(t => t.classList.toggle('active', t.dataset.otab === 'owned'));
+  renderOverviewTab();
+  document.getElementById('overviewModal').style.display = 'flex';
+}
+function switchOvTab(tab) {
+  overviewTab = tab;
+  document.querySelectorAll('.overview-tab').forEach(t => t.classList.toggle('active', t.dataset.otab === tab));
+  renderOverviewTab();
+}
+function closeOverviewModal() {
+  document.getElementById('overviewModal').style.display = 'none';
 }
 
 // ==================== BONUS (个人 + 全员 满赠) ====================
@@ -646,13 +757,14 @@ function renderBonus() {
   panel.innerHTML = `
     <div class="bn-grid">
       <div class="bn-cell">
-        <div class="bn-cell-head"><span>🎁 个人满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('personal')">详情</button></div>
+        <div class="bn-cell-head"><span>个人满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('personal')">详情</button></div>
         <div class="bn-cell-sub">已解锁 ${pUnlocked}/${PERSONAL_BONUS_TOTAL} · 双池合计 ${total} 抽</div>
         ${pCard}
       </div>
       <div class="bn-cell">
-        <div class="bn-cell-head"><span>🌍 全员满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('global')">详情</button></div>
+        <div class="bn-cell-head"><span>全员满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('global')">详情</button></div>
         <div class="bn-cell-sub">已解锁 ${gUnlocked}/${GLOBAL_BONUS.length} · 全员 ${fmtWan(GLOBAL_TOTAL_DRAWS)}</div>
+        <div class="bn-note">每日24点更新</div>
         ${gCard}
       </div>
     </div>
@@ -665,7 +777,7 @@ function openBonusDetail(type) {
   let title, body;
 
   if (type === 'personal') {
-    title = '🎁 个人满赠详情';
+    title = '个人满赠详情';
     body = `<div class="bm-sub">双池合计 ${total} 抽（夏日 ${poolDraws('xiari')} / 橘暖 ${poolDraws('junuan')}）· 已解锁 ${personalUnlockedCount()}/${PERSONAL_BONUS_TOTAL}</div>`;
     body += PERSONAL_BONUS.map(m => {
       const unlocked = personalTierUnlocked(m);
@@ -685,7 +797,7 @@ function openBonusDetail(type) {
       </div>`;
     }).join('');
   } else {
-    title = '🌍 全员满赠详情';
+    title = '全员满赠详情';
     body = `<div class="bm-sub">全员抽数 ${fmtWan(GLOBAL_TOTAL_DRAWS)} · 个人 ${total} 抽${personalEligible ? '' : '（未达 ' + GLOBAL_PERSONAL_MIN + ' 抽门槛）'} · 已解锁 ${globalUnlockedCount()}/${GLOBAL_BONUS.length}</div>`;
     if (!personalEligible) {
       body += `<div class="ms-hint">⚠️ 全员达标后还需个人双池合计 &gt; ${GLOBAL_PERSONAL_MIN} 抽才有资格解锁</div>`;
@@ -722,20 +834,22 @@ function closeBonusModal() {
 // ==================== 额外奖励确认（限时礼 / 宣传礼）====================
 let extraModalMode = null; // 'limited' | 'promo'
 const LIMITED_TIERS = [
-  { key: '0-2',  label: '开售 0-2 小时',  rewards: '限时卡1、2、3' },
-  { key: '3-6',  label: '开售 3-6 小时',  rewards: '限时卡1、2' },
+  { key: '0-2', label: '开售 0-2 小时', rewards: '限时卡1、2、3' },
+  { key: '3-6', label: '开售 3-6 小时', rewards: '限时卡1、2' },
   { key: '7-24', label: '开售 7-24 小时', rewards: '限时卡3' },
 ];
 
 function openLimitedConfirm() {
   extraModalMode = 'limited';
   const cur = extraRewards.限时时段;
-  const opts = LIMITED_TIERS.map(t => `
+  const opts = LIMITED_TIERS.map(
+    t => `
     <label class="extra-opt ${cur === t.key ? 'active' : ''}" data-val="${t.key}">
       <input type="radio" name="limitedTier" value="${t.key}" ${cur === t.key ? 'checked' : ''}>
       <div class="extra-opt-main"><div class="extra-opt-label">${t.label}</div><div class="extra-opt-sub">赠 ${t.rewards}</div></div>
-    </label>`).join('');
-  document.getElementById('extraModalTitle').textContent = '🍏 限时礼';
+    </label>`,
+  ).join('');
+  document.getElementById('extraModalTitle').textContent = '限时礼';
   document.getElementById('extraModalBody').innerHTML = `
     <div class="bm-sub">选择你的下单时段，解锁对应限时卡</div>
     <div class="extra-opts">${opts}</div>`;
@@ -746,7 +860,7 @@ function openPromoConfirm() {
   extraModalMode = 'promo';
   const hasRecord = totalDraws() > 0;
   const cur = extraRewards;
-  document.getElementById('extraModalTitle').textContent = '🍉 宣传礼';
+  document.getElementById('extraModalTitle').textContent = '宣传礼';
   document.getElementById('extraModalBody').innerHTML = `
     <div class="bm-sub">在 xhs/dy/ks 发布奇妙浆果园 ccl 相关内容并满 52👍，且需有盲盒下单记录</div>
     ${hasRecord ? '' : '<div class="ms-hint">⚠️ 当前无抽卡记录，需先在录入页添加至少 1 张卡</div>'}
@@ -788,7 +902,7 @@ function closeGroupMenu() {
 function setGroupMode(mode) {
   groupMode = mode;
   document.getElementById('groupIconLabel').textContent =
-    mode === 'rarity' ? '📊' : '🏷️';
+    mode === 'rarity' ? '稀有度' : '卡牌类型';
   document
     .querySelectorAll('.group-option')
     .forEach(o => o.classList.toggle('active', o.dataset.group === mode));
@@ -822,7 +936,7 @@ function renderCollection() {
   if (groupMode === 'type') {
     const exCards = cards.filter(card => card.rarity === 'ex');
     if (exCards.length) {
-      groups.push({ title: '🎁 特典', cls: 'ex-title', cards: exCards });
+      groups.push({ title: '🎁 特殊奖励', cls: 'ex-title', cards: exCards });
     }
   }
 
@@ -861,6 +975,9 @@ function openModal(id) {
   const c = cardCounts[currentPool] || {};
   const card = cardByID(currentPool, id);
   if (!card) return;
+  // 清除奖励卡详情可能残留的样式
+  document.getElementById('modalFrontImg').classList.remove('locked-img');
+  document.getElementById('modalFrontPH').classList.remove('locked-emoji-ph');
 
   document.getElementById('modalCid').textContent =
     card.rarity === 'ex' ? '★' : id.toUpperCase();
@@ -868,6 +985,7 @@ function openModal(id) {
   document.getElementById('modalRarity').textContent =
     `${RARITY_INFO[card.rarity].icon} ${RARITY_INFO[card.rarity].label}`;
   document.getElementById('modalCount').textContent = c[id] || 0;
+  document.getElementById('modalCountLine').innerHTML = `持有 <span id="modalCount">${c[id] || 0}</span> 张`;
 
   const front = document.getElementById('modalFront');
   front.className = 'modal-face front ' + card.rarity + '-face';
@@ -895,6 +1013,39 @@ function openModal(id) {
 function closeModal() {
   document.getElementById('cardModal').style.display = 'none';
   modalCard = null;
+}
+
+// 奖励卡详情（复用 cardModal，结构与双卡池一致）
+function openRewardModal(name, source, tier, unlocked) {
+  document.getElementById('modalCid').textContent = name;
+  document.getElementById('modalName').textContent = source;
+  document.getElementById('modalRarity').textContent = unlocked ? '✅ 已解锁' : '🔒 未解锁';
+  document.getElementById('modalCountLine').textContent = unlocked ? `解锁条件：${tier}` : `解锁条件：${tier}`;
+
+  const front = document.getElementById('modalFront');
+  front.className = 'modal-face front reward-face';
+  const frontImg = document.getElementById('modalFrontImg');
+  const ph = document.getElementById('modalFrontPH');
+  const img = rewardImg(name);
+  frontImg.src = img;
+  frontImg.style.display = 'block';
+  frontImg.onerror = function () {
+    this.style.display = 'none';
+    ph.textContent = '🎁';
+    ph.style.display = 'flex';
+  };
+  if (unlocked) {
+    frontImg.classList.remove('locked-img');
+    ph.classList.remove('locked-emoji-ph');
+    ph.style.display = 'none';
+  } else {
+    // 未解锁：图片半透明 + 🔒 叠加
+    frontImg.classList.add('locked-img');
+    ph.textContent = '🔒';
+    ph.classList.add('locked-emoji-ph');
+    ph.style.display = 'flex';
+  }
+  document.getElementById('cardModal').style.display = 'flex';
 }
 
 // ==================== SCREENSHOT OCR（中文识别版）====================
@@ -1362,7 +1513,7 @@ function renderEntry() {
     if (exCards.length)
       groups.push({
         key: 'ex',
-        title: '🎁 特典',
+        title: '🎁 特殊奖励',
         cls: 'ex-title',
         cards: exCards,
       });
@@ -1445,14 +1596,14 @@ function adjustEntry(id, delta) {
   const next = Math.max(0, cur + delta);
   cardCounts[currentPool][id] = next;
   if (delta > 0) {
-    history.unshift({
+    pushHistory({
       time: new Date().toISOString(),
       pool: currentPool,
       cards: [id],
       type: 'manual',
     });
   } else if (delta < 0 && cur > 0) {
-    history.unshift({
+    pushHistory({
       time: new Date().toISOString(),
       pool: currentPool,
       cards: [id],
@@ -1482,10 +1633,12 @@ function setEntryCount(id, val) {
   } // 无变化
   cardCounts[currentPool][id] = next;
   const type = next > cur ? 'manual' : 'adjust';
-  history.unshift({
+  const diff = Math.abs(next - cur);
+  const cards = Array(diff).fill(id);
+  pushHistory({
     time: new Date().toISOString(),
     pool: currentPool,
-    cards: [id],
+    cards,
     type,
   });
   saveData();
@@ -1494,6 +1647,11 @@ function setEntryCount(id, val) {
   updateStats();
   renderPanels();
   if (currentTab === 'history') renderHistory();
+}
+
+// 记录入历史：每次操作独立存储，渲染层按 1 分钟分组展示
+function pushHistory(entry) {
+  history.unshift(entry);
 }
 
 function undoLast() {
@@ -1527,7 +1685,7 @@ function addCards(cards, type) {
   for (const id of cards) {
     cardCounts[currentPool][id] = (cardCounts[currentPool][id] || 0) + 1;
   }
-  history.unshift({
+  pushHistory({
     time: new Date().toISOString(),
     pool: currentPool,
     cards,
@@ -1548,26 +1706,65 @@ function renderHistory() {
       '<div style="text-align:center;padding:40px;color:var(--brown-200);">🃏 还没有抽卡记录</div>';
     return;
   }
-  container.innerHTML = history
-    .map(h => {
-      const t = new Date(h.time);
+  // 分组：手动操作(manual/adjust)按「所在分钟」+ 池子归组；OCR/十连各自独立成组
+  const groups = [];
+  for (const h of history) {
+    const isManual = h.type === 'manual' || h.type === 'adjust';
+    const t = new Date(h.time);
+    // 分钟桶 key：年月日时分子
+    const bucketKey = `${t.getFullYear()}-${t.getMonth()}-${t.getDate()}-${t.getHours()}-${t.getMinutes()}`;
+    const last = groups[groups.length - 1];
+    if (
+      isManual &&
+      last &&
+      last.isManual &&
+      last.pool === h.pool &&
+      last.bucketKey === bucketKey
+    ) {
+      last.items.push(h);
+      last.startMs = Math.min(last.startMs, t.getTime());
+    } else {
+      groups.push({
+        isManual,
+        pool: h.pool,
+        bucketKey,
+        startMs: t.getTime(),
+        items: [h],
+      });
+    }
+  }
+
+  container.innerHTML = groups
+    .map(g => {
+      const pn = g.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
+      // 组时间标签：取组内最早时间
+      const t = new Date(g.startMs);
       const ts = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-      const pn = h.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
-      const tl =
-        { ocr: '📸截图', batch: '🔟十连', manual: '🂡单抽', adjust: '✏️调整' }[
-          h.type
-        ] || h.type;
-      return `<div class="history-item">
-      <div class="history-header"><span class="history-pool">${pn} · ${tl}</span><span class="history-time">${ts}</span></div>
-      <div class="history-cards">${h.cards
-        .map(id => {
-          const card = cardByID(h.pool, id);
+      // 组内各卡净变化：manual 计正、adjust 计负
+      const delta = {};
+      for (const it of g.items) {
+        const sign = it.type === 'adjust' ? -1 : 1;
+        for (const id of it.cards) delta[id] = (delta[id] || 0) + sign;
+      }
+      const chips = Object.entries(delta)
+        .map(([id, n]) => {
+          const card = cardByID(g.pool, id);
           const cat = card ? card.rarity : catOf(id);
           const name = card ? card.name : '?';
           const idText = cat === 'ex' ? '★' : id.toUpperCase();
-          return `<span class="history-chip chip-${cat}">${idText} ${name}</span>`;
+          const sign = n > 0 ? '+' : '';
+          const cls = n > 0 ? 'chip-up' : 'chip-down';
+          return `<span class="history-chip chip-${cat} ${cls}">${idText} ${name} ${sign}${n}</span>`;
         })
-        .join('')}</div>
+        .join('');
+      const label = g.isManual
+        ? '🂡手动'
+        : g.items[0].type === 'ocr'
+          ? '📸截图'
+          : '🔟十连';
+      return `<div class="history-item">
+      <div class="history-header"><span class="history-pool">${pn} · ${label}</span><span class="history-time">${ts}</span></div>
+      <div class="history-cards">${chips}</div>
     </div>`;
     })
     .join('');
@@ -1632,7 +1829,11 @@ function importData() {
         history = data.history || [];
 
         cardImages = data.cardImages || { xiari: {}, junuan: {} };
-        extraRewards = data.extraRewards || { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
+        extraRewards = data.extraRewards || {
+          限时时段: null,
+          宣传达标: false,
+          宣传下单时间: '',
+        };
         saveData();
         // 迁移导入的旧数据
         loadData();
@@ -1660,6 +1861,7 @@ function clearAllData() {
   cardCounts = { xiari: {}, junuan: {} };
   history = [];
   cardImages = { xiari: {}, junuan: {} };
+  extraRewards = { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
   saveData();
   updateStats();
   renderCollection();
@@ -1698,7 +1900,10 @@ document.addEventListener('click', e => {
 
 // 关闭悬浮抽奖入口
 function closeFloatDraw(e) {
-  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (e) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
   const el = document.getElementById('floatDraw');
   if (el) el.style.display = 'none';
 }
@@ -1718,34 +1923,47 @@ function closeFloatDraw(e) {
     }
   } catch (e) {}
 
-  let dragging = false, moved = false;
-  let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+  let dragging = false,
+    moved = false;
+  let startX = 0,
+    startY = 0,
+    origLeft = 0,
+    origTop = 0;
+  let lastTouchEnd = 0; // 阻止 touch 后合成的 mouse 事件重复触发
 
   function getXY(e) {
-    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (e.touches && e.touches[0])
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
     return { x: e.clientX, y: e.clientY };
   }
   function start(e) {
     // 点关闭按钮不启动拖拽
     if (e.target && e.target.id === 'floatDrawClose') return;
+    // 忽略 touch 后合成的 mouse 事件
+    if (e.type === 'mousedown' && Date.now() - lastTouchEnd < 800) return;
     const p = getXY(e);
-    dragging = true; moved = false;
-    startX = p.x; startY = p.y;
+    dragging = true;
+    moved = false;
+    startX = p.x;
+    startY = p.y;
     const rect = el.getBoundingClientRect();
-    origLeft = rect.left; origTop = rect.top;
+    origLeft = rect.left;
+    origTop = rect.top;
     el.style.right = 'auto';
     el.style.transition = 'none';
   }
   function move(e) {
     if (!dragging) return;
     const p = getXY(e);
-    const dx = p.x - startX, dy = p.y - startY;
+    const dx = p.x - startX,
+      dy = p.y - startY;
     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
       moved = true;
       e.preventDefault();
     }
     if (!moved) return;
-    let left = origLeft + dx, top = origTop + dy;
+    let left = origLeft + dx,
+      top = origTop + dy;
     // 约束在视口内
     const maxX = window.innerWidth - el.offsetWidth;
     const maxY = window.innerHeight - el.offsetHeight;
@@ -1754,14 +1972,22 @@ function closeFloatDraw(e) {
     el.style.left = left + 'px';
     el.style.top = top + 'px';
   }
-  function end() {
+  function end(e) {
     if (!dragging) return;
+    // 忽略 touch 后合成的 mouse 事件
+    if (e && e.type === 'mouseup' && Date.now() - lastTouchEnd < 800) return;
     dragging = false;
+    if (e && e.type === 'touchend') lastTouchEnd = Date.now();
     el.style.transition = '';
     if (moved) {
       // 保存位置
       const rect = el.getBoundingClientRect();
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: rect.left, top: rect.top })); } catch (e) {}
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ left: rect.left, top: rect.top }),
+        );
+      } catch (e) {}
     } else {
       // 点击跳转
       const href = el.dataset.href;
