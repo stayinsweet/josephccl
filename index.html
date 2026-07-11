@@ -24,42 +24,43 @@
     </div>
   </header>
 
-  <!-- Pool Bar: 池子页签(左) + 分组切换图标(右) -->
-  <div class="pool-bar">
-    <div class="pool-tabs">
-      <button class="pool-tab active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
-      <button class="pool-tab" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
-    </div>
-    <div class="group-menu" id="groupMenu" style="display:none;">
-      <button class="group-icon-btn" id="groupIconBtn" onclick="toggleGroupMenu(event)" title="切换分组方式">
-        <span id="groupIconLabel">🏷️</span>
-      </button>
-      <div class="group-dropdown" id="groupDropdown">
-        <div class="group-option active" data-group="type" onclick="setGroupMode('type')">🏷️ 按卡牌类型</div>
-        <div class="group-option" data-group="rarity" onclick="setGroupMode('rarity')">📊 按稀有度</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Main Content -->
   <main class="content" id="mainContent">
 
     <!-- Tab 1: 我的收藏 -->
     <div class="tab-page active" id="tab-collection">
-      <div class="stats-row" id="statsRow"></div>
+      <!-- 总统计板块 -->
+      <div class="panel" id="overviewPanel"></div>
 
-      <div class="bonus-section">
-        <div class="bonus-header">
-          <h3>🎁 满赠进度</h3>
-          <span class="bonus-total" id="bonusTotal">0 抽</span>
+      <!-- 满赠进度（个人 + 全员 同行） -->
+      <div class="panel" id="bonusPanel"></div>
+
+      <!-- 单卡池区：页签 + 计数 + 卡牌网格 -->
+      <div class="pool-section">
+        <!-- Pool Bar: 池子页签(左) + 分组切换图标(右) -->
+        <div class="pool-bar">
+          <div class="pool-tabs">
+            <button class="pool-tab active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
+            <button class="pool-tab" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
+          </div>
+          <div class="group-menu" id="groupMenu" style="display:none;">
+            <button class="group-icon-btn" id="groupIconBtn" onclick="toggleGroupMenu(event)" title="切换分组方式">
+              <span id="groupIconLabel">🏷️</span>
+            </button>
+            <div class="group-dropdown" id="groupDropdown">
+              <div class="group-option active" data-group="type" onclick="setGroupMode('type')">🏷️ 按卡牌类型</div>
+              <div class="group-option" data-group="rarity" onclick="setGroupMode('rarity')">📊 按稀有度</div>
+            </div>
+          </div>
         </div>
-        <div id="bonusMilestones"></div>
-        <div style="margin-top:10px;">
-          <button class="btn btn-sm btn-outline" onclick="editMilestones()">⚙️ 设置满赠档位</button>
-        </div>
+
+        <div class="stats-row" id="statsRow"></div>
+
+        <div id="collectionGrid"></div>
       </div>
 
-      <div id="collectionGrid"></div>
+      <!-- 奖励卡池（个人满赠 + 全员满赠 解锁的卡片，不可手动加减） -->
+      <div class="panel" id="rewardPool"></div>
     </div>
 
     <!-- Tab 2: 截图识别 -->
@@ -165,6 +166,16 @@
     </div>
     <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="adjustCard(1)">➕ 加一抽</button>
     <button class="btn btn-outline" style="width:100%;" onclick="closeModal()">关闭</button>
+  </div>
+</div>
+
+<!-- 满赠详情 Modal -->
+<div class="modal-overlay" id="bonusModal" style="display:none;" onclick="if(event.target===this)closeBonusModal()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="bonusModalTitle">满赠详情</div>
+    <div id="bonusModalBody"></div>
+    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeBonusModal()">关闭</button>
   </div>
 </div>
 

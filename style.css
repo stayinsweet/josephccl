@@ -74,11 +74,15 @@ html, body {
 .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
 .btn-white { color: white; border-color: rgba(255,255,255,0.4); }
 
+/* 单卡池区：页签 + 计数 + 卡牌网格 */
+.pool-section {
+  background: var(--white); border-radius: 16px; padding: 4px 14px 16px;
+  margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
 /* Pool Bar: 池子页签(左) + 分组切换图标(右) */
 .pool-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 0 16px; background: var(--white); flex-shrink: 0;
-  border-bottom: 1px solid var(--orange-100);
+  border-bottom: 1px solid var(--orange-100); margin-bottom: 12px;
 }
 .pool-tabs { display: flex; gap: 4px; }
 .pool-tab {
@@ -138,28 +142,89 @@ html, body {
 .stat-card .num.hr-num { color: var(--hr-color); }
 .stat-card .num.sp-num { color: var(--sp-color); }
 .stat-card .num.ex-num { color: var(--ex-color); }
-.stat-card .lbl { font-size: 11px; color: var(--brown-200); margin-top: 2px; }
+.stat-card .lbl { font-size: 11px; color: var(--brown-200); margin-top: 2px; line-height: 1.3; word-break: keep-all; }
 
-/* 满赠 */
-.bonus-section {
-  background: var(--white); border-radius: 16px; padding: 16px; margin-bottom: 14px;
+/* 通用面板 */
+.panel {
+  background: var(--white); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
-.bonus-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.bonus-header h3 { font-size: 15px; display: flex; align-items: center; gap: 6px; }
-.bonus-total { font-size: 22px; font-weight: 800; color: var(--orange-600); }
-.bonus-milestone { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.bonus-milestone:last-child { margin-bottom: 0; }
-.bonus-label { font-size: 12px; color: var(--brown-800); min-width: 50px; }
-.bonus-reward { font-size: 11px; color: var(--orange-600); font-weight: 500; min-width: 70px; }
-.bonus-bar-wrap { flex: 1; height: 8px; background: var(--orange-100); border-radius: 4px; overflow: hidden; }
-.bonus-bar-fill { height: 100%; background: linear-gradient(90deg, var(--orange-400),var(--orange-600)); border-radius: 4px; transition: width 0.5s; }
-.bonus-bar-fill.done { background: linear-gradient(90deg, var(--pr-color), var(--orange-500)); }
-.bonus-count { font-size: 10px; color: var(--brown-200); min-width: 36px; text-align: right; }
+.panel-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.panel-sub { font-size: 11px; font-weight: 500; color: var(--brown-200); }
+
+/* 总统计 */
+.overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.overview-grid .ov-card:first-child { grid-column: 1 / -1; }
+.ov-card { background: var(--orange-50); border-radius: 12px; padding: 12px; }
+.ov-label { font-size: 11px; color: var(--brown-200); margin-bottom: 4px; }
+.ov-num { font-size: 26px; font-weight: 800; color: var(--brown-900); line-height: 1.1; }
+.ov-num.orange { color: var(--orange-600); }
+.ov-slash { font-size: 14px; font-weight: 600; color: var(--brown-200); }
+.ov-bar-wrap { height: 6px; background: var(--orange-100); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.ov-bar { height: 100%; background: linear-gradient(90deg, var(--orange-400),var(--orange-600)); border-radius: 3px; transition: width 0.5s; }
+.ov-bar.reward { background: linear-gradient(90deg, var(--pr-color), var(--sp-color)); }
+.ov-pct { font-size: 10px; color: var(--brown-200); margin-top: 3px; text-align: right; }
+
+/* 满赠档位行（个人 / 全员共用） */
+.ms-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ms-row:last-child { margin-bottom: 0; }
+.ms-label { font-size: 12px; color: var(--brown-800); min-width: 44px; font-weight: 600; }
+.ms-bar-wrap { flex: 1; height: 8px; background: var(--orange-100); border-radius: 4px; overflow: hidden; }
+.ms-bar-fill { height: 100%; background: linear-gradient(90deg, var(--orange-400),var(--orange-600)); border-radius: 4px; transition: width 0.5s; }
+.ms-bar-fill.done { background: linear-gradient(90deg, var(--pr-color), var(--orange-500)); }
+.ms-reward { font-size: 11px; color: var(--orange-600); font-weight: 600; min-width: 78px; }
+.ms-row.done .ms-reward { color: #4CAF50; }
+.ms-count { font-size: 10px; color: var(--brown-200); min-width: 64px; text-align: right; }
+.ms-hint { font-size: 11px; color: var(--danger); margin-bottom: 8px; }
+
+/* 满赠同行卡片（个人 + 全员） */
+.bn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bn-cell { background: var(--orange-50); border-radius: 12px; padding: 10px; }
+.bn-cell-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.bn-detail-btn {
+  border: none; background: var(--white); color: var(--orange-600); font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 8px; cursor: pointer; font-family: inherit;
+}
+.bn-detail-btn:active { transform: scale(0.92); }
+.bn-cell-sub { font-size: 10px; color: var(--brown-200); margin-bottom: 8px; }
+.bn-next { font-size: 12px; }
+.bn-next.done { text-align: center; padding: 6px 0; }
+.bn-next-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+.bn-next-label { font-size: 10px; color: var(--brown-200); }
+.bn-next-draws { font-size: 14px; font-weight: 800; color: var(--orange-600); }
+.bn-next-reward { font-size: 12px; font-weight: 600; color: var(--brown-800); margin-bottom: 5px; }
+.bn-next.done .bn-next-reward { color: #4CAF50; }
+.bn-bar-wrap { height: 6px; background: var(--orange-100); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.bn-bar { height: 100%; background: linear-gradient(90deg, var(--orange-400),var(--orange-600)); border-radius: 3px; transition: width 0.5s; }
+.bn-next-foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--brown-200); }
+
+/* 满赠详情弹窗 */
+.bonus-modal-title { font-size: 17px; font-weight: 800; text-align: center; margin-bottom: 12px; }
+.bm-sub { font-size: 11px; color: var(--brown-200); text-align: center; margin-bottom: 12px; }
+
+/* 奖励卡池 */
+.reward-group { margin-bottom: 14px; }
+.reward-group:last-child { margin-bottom: 0; }
+.reward-group-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.reward-group-sub { font-size: 11px; font-weight: 600; color: var(--orange-600); }
+.reward-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.reward-cell {
+  background: var(--orange-50); border-radius: 10px; padding: 8px 4px; text-align: center;
+  border: 2px solid transparent; transition: all 0.15s;
+}
+.reward-cell.unlocked.rw-personal { background: var(--pr-bg); border-color: var(--pr-border); }
+.reward-cell.unlocked.rw-global { background: var(--sp-bg); border-color: var(--sp-border); }
+.reward-cell.locked { opacity: 0.45; }
+.reward-ph { font-size: 22px; margin-bottom: 3px; }
+.reward-name { font-size: 11px; font-weight: 700; color: var(--brown-900); line-height: 1.2; word-break: keep-all; }
+.reward-tier { font-size: 9px; color: var(--brown-200); margin-top: 3px; }
+.reward-cell.unlocked .reward-tier { color: #4CAF50; font-weight: 600; }
 
 /* Collection */
 .rarity-section { margin-bottom: 18px; }
 .rarity-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.rarity-title .group-count { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--brown-200); background: var(--orange-50); padding: 2px 8px; border-radius: 8px; }
+.rarity-title .group-count.all { color: #4CAF50; background: #EEF8EE; }
 .rarity-title.r-title { color: #5070A0; }
 .rarity-title.pr-title { color: #B08018; }
 .rarity-title.sr-title { color: #A060B0; }
@@ -193,10 +258,10 @@ html, body {
 .card-cell .badge {
   position: absolute; top: -4px; right: -4px; background: var(--danger); color: white;
   min-width: 20px; height: 20px; border-radius: 50%; font-size: 10px; font-weight: 700;
-  display: none; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(224,85,85,0.4);
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(224,85,85,0.4);
   padding: 0 4px;
 }
-.card-cell.has .badge { display: flex; }
+.card-cell.zero .badge { background: var(--brown-100); color: var(--brown-200); box-shadow: none; }
 .card-cell.zero { opacity: 0.4; }
 
 /* Screenshot Upload */

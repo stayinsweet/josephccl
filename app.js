@@ -4,7 +4,7 @@ const POOLS = {
   xiari: {
     name: '🏖️ 夏日池',
     ranges: [
-      ['日常卡', 'r', 1, 8],
+      ['日常卡', 'r', 1, 9],
       ['日常卡', 'pr', 1, 3],
       ['音乐卡', 'sr', 1, 10],
       ['音乐卡', 'pr', 4, 8],
@@ -91,10 +91,42 @@ function maxNumForRarity(pool, rarity) {
 // ==================== STATE ====================
 let cardCounts = { xiari: {}, junuan: {} };
 let history = [];
-let milestones = [
-  { draws: 10, reward: '送未公开卡' },
-];
 let cardImages = { xiari: {}, junuan: {} };
+
+// 个人满赠档位（双池合计抽数，按下单 id 合并计算）— 共 16 张奖励卡
+const PERSONAL_BONUS = [
+  { draws: 20,  rewards: ['TR3'] },
+  { draws: 30,  rewards: ['TR4'] },
+  { draws: 40,  rewards: ['TR5', 'TR6'] },
+  { draws: 50,  rewards: ['TR7'] },
+  { draws: 60,  rewards: ['TR8'] },
+  { draws: 70,  rewards: ['TR9'] },
+  { draws: 80,  rewards: ['TR10'] },
+  { draws: 90,  rewards: ['TR11'] },
+  { draws: 120, rewards: ['白瓷卡'] },
+  { draws: 150, rewards: ['水敏卡'] },
+  { draws: 180, rewards: ['仿真cd'] },
+  { draws: 210, rewards: ['卡套'] },
+  { draws: 240, rewards: ['仿真拍立得1'] },
+  { draws: 270, rewards: ['仿真拍立得2'] },
+  { draws: 300, rewards: ['许愿卡'] },
+];
+const PERSONAL_BONUS_TOTAL = 16; // TR5+TR6 双解锁
+
+// 全员满赠档位（全员抽数达标 + 个人双池合计>10抽 才解锁）— 特典卡1-7
+const GLOBAL_BONUS = [
+  { draws: 30000,  card: '特典卡1' },
+  { draws: 60000,  card: '特典卡2' },
+  { draws: 90000,  card: '特典卡3' },
+  { draws: 120000, card: '特典卡4' },
+  { draws: 150000, card: '特典卡5' },
+  { draws: 180000, card: '特典卡6' },
+  { draws: 210000, card: '特典卡7' },
+];
+// 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
+const GLOBAL_TOTAL_DRAWS = 0;
+// 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
+const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
 let currentTab = 'collection';
 let inputMode = 'single';
@@ -113,7 +145,6 @@ function loadData() {
     const d = JSON.parse(localStorage.getItem('ccg2_data') || '{}');
     cardCounts = d.cardCounts || { xiari: {}, junuan: {} };
     history = d.history || [];
-    milestones = d.milestones || milestones;
     cardImages = d.cardImages || { xiari: {}, junuan: {} };
   } catch(e) {}
   // 迁移：删除新卡池中不存在的旧 id（如旧 xiari 的 r9/r10/r11）
@@ -132,13 +163,63 @@ function loadData() {
   }
 }
 function saveData() {
-  localStorage.setItem('ccg2_data', JSON.stringify({ cardCounts, history, milestones, cardImages, version: 3 }));
+  localStorage.setItem('ccg2_data', JSON.stringify({ cardCounts, history, cardImages, version: 3 }));
 }
 
 // ==================== HELPERS ====================
 function catOf(id) { return id.replace(/\d+/, ''); }
 function numOf(id) { return parseInt(id.replace(/[a-zA-Z]+/, '')); }
 function cardInfo(id) { return cardByID(currentPool, id); }
+
+// 双池合计抽数（按下单 id 合并计算，即所有卡的计数总和）
+function totalDraws() {
+  let total = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
+  }
+  return total;
+}
+// 双池合计去重收集数（不含 ex 特典卡）
+function collectedCount() {
+  let count = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    const c = cardCounts[pool] || {};
+    for (const card of poolCards(pool)) {
+      if (card.rarity === 'ex') continue;
+      if ((c[card.id] || 0) > 0) count++;
+    }
+  }
+  return count;
+}
+// 双池普通卡总数（不含 ex）
+function poolTotalCount() {
+  let count = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    for (const card of poolCards(pool)) {
+      if (card.rarity === 'ex') continue;
+      count++;
+    }
+  }
+  return count;
+}
+// 个人满赠已解锁奖励卡数（自动：双池合计达到档位即解锁该档全部奖励）
+function personalUnlockedCount() {
+  const total = totalDraws();
+  let n = 0;
+  for (const m of PERSONAL_BONUS) {
+    if (total >= m.draws) n += m.rewards.length;
+  }
+  return n;
+}
+// 全员满赠已解锁特典卡数（全员抽数达标 且 个人>10抽 才解锁）
+function globalUnlockedCount() {
+  const personalEligible = totalDraws() > GLOBAL_PERSONAL_MIN;
+  let n = 0;
+  for (const m of GLOBAL_BONUS) {
+    if (GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible) n++;
+  }
+  return n;
+}
 
 // ==================== POOL & TAB ====================
 function switchPool(pool) {
@@ -149,7 +230,7 @@ function switchPool(pool) {
     selectedCat = poolRarities(pool)[0] || 'r';
     currentNum = '';
   }
-  renderCollection(); updateStats(); renderBonus();
+  renderCollection(); updateStats(); renderPanels();
   renderCategoryButtons(); renderNumpad(); updateInputDisplay();
 }
 function switchTab(tab) {
@@ -161,7 +242,7 @@ function switchTab(tab) {
   // 分组切换图标仅在收藏页显示
   const gm = document.getElementById('groupMenu');
   if (gm) gm.style.display = (tab === 'collection') ? '' : 'none';
-  if (tab === 'collection') { renderCollection(); updateStats(); renderBonus(); }
+  if (tab === 'collection') { renderCollection(); updateStats(); renderPanels(); }
   if (tab === 'history') renderHistory();
   if (tab === 'input') renderNumpad();
 }
@@ -169,57 +250,237 @@ function switchTab(tab) {
 // ==================== STATS ====================
 function updateStats() {
   const c = cardCounts[currentPool] || {};
-  const totals = {};
-  for (const [id, cnt] of Object.entries(c)) {
-    const card = cardByID(currentPool, id);
-    if (!card) continue;
-    totals[card.rarity] = (totals[card.rarity] || 0) + cnt;
-  }
   // 两池总抽数
   let total = 0;
   for (const pool of ['xiari', 'junuan']) {
     for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
   }
 
-  // 渲染统计行：总抽数 + 当前池每种稀有度
+  // 渲染统计行：总抽数 + 当前池按分组维度统计
   const row = document.getElementById('statsRow');
-  if (row) {
-    let html = `<div class="stat-card"><div class="num orange">${total}</div><div class="lbl">总抽数</div></div>`;
+  if (!row) return;
+  let html = `<div class="stat-card"><div class="num orange">${total}</div><div class="lbl">总抽数</div></div>`;
+
+  if (groupMode === 'rarity') {
+    // 按稀有度
+    const totals = {};
+    for (const [id, cnt] of Object.entries(c)) {
+      const card = cardByID(currentPool, id);
+      if (!card) continue;
+      totals[card.rarity] = (totals[card.rarity] || 0) + cnt;
+    }
     for (const r of poolRarities(currentPool)) {
       html += `<div class="stat-card"><div class="num ${r}-num">${totals[r] || 0}</div><div class="lbl">${RARITY_INFO[r].label}</div></div>`;
     }
-    row.innerHTML = html;
+  } else {
+    // 按卡牌类型（不含特典）
+    const totals = {};
+    for (const [id, cnt] of Object.entries(c)) {
+      const card = cardByID(currentPool, id);
+      if (!card || card.rarity === 'ex') continue;
+      totals[card.type] = (totals[card.type] || 0) + cnt;
+    }
+    for (const t of poolTypes(currentPool)) {
+      html += `<div class="stat-card"><div class="num">${totals[t] || 0}</div><div class="lbl">${t}</div></div>`;
+    }
   }
-  document.getElementById('bonusTotal').textContent = total + ' 抽';
+  row.innerHTML = html;
 }
 
-// ==================== BONUS ====================
-function renderBonus() {
-  const container = document.getElementById('bonusMilestones');
-  let total = 0;
-  for (const pool of ['xiari', 'junuan']) {
-    for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
-  }
-  container.innerHTML = milestones.map(m => {
-    const pct = Math.min(100, Math.round((total / m.draws) * 100));
-    const done = total >= m.draws;
-    return `<div class="bonus-milestone">
-      <span class="bonus-label">${m.draws}抽</span>
-      <div class="bonus-bar-wrap"><div class="bonus-bar-fill${done?' done':''}" style="width:${pct}%"></div></div>
-      <span class="bonus-reward">${done?'✅ ':''}${m.reward}</span>
-      <span class="bonus-count">${total}/${m.draws}</span>
-    </div>`;
-  }).join('');
+// 渲染所有进度板块
+function renderPanels() {
+  renderOverview(); renderBonus(); renderRewardPool();
 }
-function editMilestones() {
-  const input = prompt('满赠档位（每行一个：抽数,奖励名称）\n例：30,自选卡×1',
-    milestones.map(m => m.draws + ',' + m.reward).join('\n'));
-  if (input !== null) {
-    milestones = input.trim().split('\n').filter(l=>l.trim()).map(l => {
-      const [d, ...r] = l.split(','); return { draws: parseInt(d), reward: r.join(',').trim() };
-    }).filter(m => m.draws > 0);
-    saveData(); renderBonus(); showToast('✅ 满赠档位已更新');
+
+// ==================== REWARD POOL (奖励卡池) ====================
+function renderRewardPool() {
+  const panel = document.getElementById('rewardPool');
+  if (!panel) return;
+  const total = totalDraws();
+  const personalEligible = total > GLOBAL_PERSONAL_MIN;
+
+  // 个人满赠奖励卡
+  const personalCards = [];
+  PERSONAL_BONUS.forEach(m => {
+    const unlocked = total >= m.draws;
+    m.rewards.forEach(name => personalCards.push({ name, source: '个人满赠', tier: m.draws, unlocked }));
+  });
+  // 全员满赠奖励卡
+  const globalCards = GLOBAL_BONUS.map(m => ({
+    name: m.card, source: '全员满赠', tier: m.draws,
+    unlocked: GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible,
+  }));
+
+  const renderGroup = (title, sub, cards, colorClass) => {
+    const cells = cards.map(c => `
+      <div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}">
+        <div class="reward-ph">${c.unlocked ? '🎁' : '🔒'}</div>
+        <div class="reward-name">${c.name}</div>
+        <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier + '抽'}</div>
+      </div>`).join('');
+    return `<div class="reward-group">
+      <div class="reward-group-head"><span>${title}</span><span class="reward-group-sub">${sub}</span></div>
+      <div class="reward-grid">${cells}</div>
+    </div>`;
+  };
+
+  const pUnlocked = personalCards.filter(c => c.unlocked).length;
+  const gUnlocked = globalCards.filter(c => c.unlocked).length;
+
+  panel.innerHTML = `
+    <div class="panel-title">🏆 奖励卡池 <span class="panel-sub">满赠自动解锁，不可手动加减</span></div>
+    ${renderGroup('🎁 个人满赠', `${pUnlocked}/${PERSONAL_BONUS_TOTAL}`, personalCards, 'rw-personal')}
+    ${renderGroup('🌍 全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
+  `;
+}
+
+// ==================== OVERVIEW (总统计) ====================
+function renderOverview() {
+  const panel = document.getElementById('overviewPanel');
+  if (!panel) return;
+  const total = totalDraws();
+  const collected = collectedCount();
+  const poolTotal = poolTotalCount();
+  const rewardUnlocked = personalUnlockedCount() + globalUnlockedCount();
+  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length; // 16 + 7 = 23
+
+  const poolPct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
+  const rewardPct = Math.round((rewardUnlocked / rewardTotal) * 100);
+
+  panel.innerHTML = `
+    <div class="panel-title">📊 总统计</div>
+    <div class="overview-grid">
+      <div class="ov-card">
+        <div class="ov-label">双池总抽数</div>
+        <div class="ov-num orange">${total}</div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-label">双池图鉴总进度</div>
+        <div class="ov-num">${collected}<span class="ov-slash">/${poolTotal}</span></div>
+        <div class="ov-bar-wrap"><div class="ov-bar" style="width:${poolPct}%"></div></div>
+        <div class="ov-pct">${poolPct}%</div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-label">奖励卡池总进度</div>
+        <div class="ov-num">${rewardUnlocked}<span class="ov-slash">/${rewardTotal}</span></div>
+        <div class="ov-bar-wrap"><div class="ov-bar reward" style="width:${rewardPct}%"></div></div>
+        <div class="ov-pct">${rewardPct}%</div>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== BONUS (个人 + 全员 满赠) ====================
+function nextPersonalTier() {
+  const total = totalDraws();
+  return PERSONAL_BONUS.find(m => total < m.draws) || null;
+}
+function nextGlobalTier() {
+  return GLOBAL_BONUS.find(m => GLOBAL_TOTAL_DRAWS < m.draws) || null;
+}
+function fmtWan(n) { return (n / 10000) + '万'; }
+
+function renderBonus() {
+  const panel = document.getElementById('bonusPanel');
+  if (!panel) return;
+  const total = totalDraws();
+  const personalEligible = total > GLOBAL_PERSONAL_MIN;
+  const pUnlocked = personalUnlockedCount();
+  const gUnlocked = globalUnlockedCount();
+
+  // 个人下一档
+  const pNext = nextPersonalTier();
+  let pCard;
+  if (pNext) {
+    const pct = Math.min(100, Math.round((total / pNext.draws) * 100));
+    pCard = `<div class="bn-next">
+      <div class="bn-next-head"><span class="bn-next-label">下一档</span><span class="bn-next-draws">${pNext.draws}抽</span></div>
+      <div class="bn-next-reward">🔒 ${pNext.rewards.join(' + ')}</div>
+      <div class="bn-bar-wrap"><div class="bn-bar" style="width:${pct}%"></div></div>
+      <div class="bn-next-foot"><span>${total}/${pNext.draws}</span><span>还差 ${pNext.draws - total} 抽</span></div>
+    </div>`;
+  } else {
+    pCard = `<div class="bn-next done"><div class="bn-next-reward">✅ 全部解锁</div></div>`;
   }
+
+  // 全员下一档
+  const gNext = nextGlobalTier();
+  let gCard;
+  if (gNext) {
+    const pct = Math.min(100, Math.round((GLOBAL_TOTAL_DRAWS / gNext.draws) * 100));
+    const blocked = GLOBAL_TOTAL_DRAWS >= gNext.draws && !personalEligible;
+    const foot = blocked ? `待个人 > ${GLOBAL_PERSONAL_MIN} 抽` : (personalEligible ? `还差 ${fmtWan(gNext.draws - GLOBAL_TOTAL_DRAWS)}` : `还需个人 > ${GLOBAL_PERSONAL_MIN} 抽`);
+    gCard = `<div class="bn-next">
+      <div class="bn-next-head"><span class="bn-next-label">下一档</span><span class="bn-next-draws">${fmtWan(gNext.draws)}抽</span></div>
+      <div class="bn-next-reward">🔒 ${gNext.card}</div>
+      <div class="bn-bar-wrap"><div class="bn-bar" style="width:${pct}%"></div></div>
+      <div class="bn-next-foot"><span>${fmtWan(GLOBAL_TOTAL_DRAWS)}/${fmtWan(gNext.draws)}</span><span>${foot}</span></div>
+    </div>`;
+  } else {
+    gCard = `<div class="bn-next done"><div class="bn-next-reward">✅ 全部解锁</div></div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="bn-grid">
+      <div class="bn-cell">
+        <div class="bn-cell-head"><span>🎁 个人满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('personal')">详情</button></div>
+        <div class="bn-cell-sub">已解锁 ${pUnlocked}/${PERSONAL_BONUS_TOTAL} · 双池合计 ${total} 抽</div>
+        ${pCard}
+      </div>
+      <div class="bn-cell">
+        <div class="bn-cell-head"><span>🌍 全员满赠</span><button class="bn-detail-btn" onclick="openBonusDetail('global')">详情</button></div>
+        <div class="bn-cell-sub">已解锁 ${gUnlocked}/${GLOBAL_BONUS.length} · 全员 ${fmtWan(GLOBAL_TOTAL_DRAWS)}</div>
+        ${gCard}
+      </div>
+    </div>
+  `;
+}
+
+function openBonusDetail(type) {
+  const total = totalDraws();
+  const personalEligible = total > GLOBAL_PERSONAL_MIN;
+  let title, body;
+
+  if (type === 'personal') {
+    title = '🎁 个人满赠详情';
+    body = `<div class="bm-sub">双池合计 ${total} 抽 · 已解锁 ${personalUnlockedCount()}/${PERSONAL_BONUS_TOTAL}</div>`;
+    body += PERSONAL_BONUS.map(m => {
+      const unlocked = total >= m.draws;
+      const pct = Math.min(100, Math.round((total / m.draws) * 100));
+      const countText = unlocked ? `${m.rewards.length}张已解锁` : `${total}/${m.draws}`;
+      return `<div class="ms-row ${unlocked?'done':''}">
+        <span class="ms-label">${m.draws}抽</span>
+        <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked?' done':''}" style="width:${pct}%"></div></div>
+        <span class="ms-reward">${unlocked?'✅ ':'🔒 '}${m.rewards.join(' + ')}</span>
+        <span class="ms-count">${countText}</span>
+      </div>`;
+    }).join('');
+  } else {
+    title = '🌍 全员满赠详情';
+    body = `<div class="bm-sub">全员抽数 ${fmtWan(GLOBAL_TOTAL_DRAWS)} · 个人 ${total} 抽${personalEligible?'':'（未达 ' + GLOBAL_PERSONAL_MIN + ' 抽门槛）'} · 已解锁 ${globalUnlockedCount()}/${GLOBAL_BONUS.length}</div>`;
+    if (!personalEligible) {
+      body += `<div class="ms-hint">⚠️ 全员达标后还需个人双池合计 &gt; ${GLOBAL_PERSONAL_MIN} 抽才有资格解锁</div>`;
+    }
+    body += GLOBAL_BONUS.map(m => {
+      const globalDone = GLOBAL_TOTAL_DRAWS >= m.draws;
+      const unlocked = globalDone && personalEligible;
+      const pct = Math.min(100, Math.round((GLOBAL_TOTAL_DRAWS / m.draws) * 100));
+      const countText = unlocked ? '已解锁' : (globalDone ? '待个人达标' : `${fmtWan(GLOBAL_TOTAL_DRAWS)}/${fmtWan(m.draws)}`);
+      return `<div class="ms-row ${unlocked?'done':''}">
+        <span class="ms-label">${fmtWan(m.draws)}抽</span>
+        <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked?' done':''}" style="width:${pct}%"></div></div>
+        <span class="ms-reward">${unlocked?'✅ ':'🔒 '}${m.card}</span>
+        <span class="ms-count">${countText}</span>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('bonusModalTitle').textContent = title;
+  document.getElementById('bonusModalBody').innerHTML = body;
+  document.getElementById('bonusModal').style.display = 'flex';
+}
+function closeBonusModal() {
+  document.getElementById('bonusModal').style.display = 'none';
 }
 
 // ==================== COLLECTION ====================
@@ -238,6 +499,7 @@ function setGroupMode(mode) {
   document.querySelectorAll('.group-option').forEach(o => o.classList.toggle('active', o.dataset.group === mode));
   closeGroupMenu();
   renderCollection();
+  updateStats();
 }
 
 function renderCollection() {
@@ -271,7 +533,10 @@ function renderCollection() {
 
   let html = '';
   for (const g of groups) {
-    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}</div><div class="card-grid">`;
+    const total = g.cards.length;
+    const collected = g.cards.filter(card => (c[card.id] || 0) > 0).length;
+    const allDone = collected === total;
+    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}<span class="group-count${allDone?' all':''}">${collected}/${total}</span></div><div class="card-grid">`;
     html += g.cards.map(card => {
       const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
       const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
@@ -339,7 +604,7 @@ function adjustCard(delta) {
   }
   saveData();
   document.getElementById('modalCount').textContent = cardCounts[currentPool][k];
-  updateStats(); renderCollection(); renderBonus();
+  updateStats(); renderCollection(); renderPanels();
 }
 
 // ==================== SCREENSHOT OCR（中文识别版）====================
@@ -866,7 +1131,7 @@ function undoLast() {
       cardCounts[last.pool][id] = Math.max(0, (cardCounts[last.pool][id] || 0) - 1);
     }
   }
-  saveData(); updateStats(); renderCollection(); renderHistory(); renderBonus();
+  saveData(); updateStats(); renderCollection(); renderHistory(); renderPanels();
   showToast('↩ 已撤销');
 }
 
@@ -877,7 +1142,7 @@ function addCards(cards, type) {
     cardCounts[currentPool][id] = (cardCounts[currentPool][id] || 0) + 1;
   }
   history.unshift({ time: new Date().toISOString(), pool: currentPool, cards, type });
-  saveData(); updateStats(); renderCollection(); renderHistory(); renderBonus();
+  saveData(); updateStats(); renderCollection(); renderHistory(); renderPanels();
 }
 
 // ==================== HISTORY ====================
@@ -910,7 +1175,7 @@ function clearHistory() {
 
 // ==================== EXPORT ====================
 function exportData() {
-  const json = JSON.stringify({ cardCounts, history, milestones, cardImages, version: 3 }, null, 2);
+  const json = JSON.stringify({ cardCounts, history, cardImages, version: 3 }, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   if (navigator.share) {
@@ -938,12 +1203,12 @@ function importData() {
         if (!data.cardCounts) { showToast('⚠️ 无效的备份文件'); return; }
         cardCounts = data.cardCounts || { xiari: {}, junuan: {} };
         history = data.history || [];
-        milestones = data.milestones || milestones;
+        
         cardImages = data.cardImages || { xiari: {}, junuan: {} };
         saveData();
         // 迁移导入的旧数据
         loadData();
-        updateStats(); renderCollection(); renderHistory(); renderBonus();
+        updateStats(); renderCollection(); renderHistory(); renderPanels();
         showToast('📥 数据已导入');
       } catch(err) { showToast('⚠️ 文件格式错误'); }
     };
@@ -958,7 +1223,7 @@ function clearAllData() {
   history = [];
   cardImages = { xiari: {}, junuan: {} };
   saveData();
-  updateStats(); renderCollection(); renderHistory(); renderBonus();
+  updateStats(); renderCollection(); renderHistory(); renderPanels();
   showToast('🗑 所有数据已清空');
 }
 
@@ -981,7 +1246,7 @@ loadData();
 switchTab('collection');
 switchPool('xiari');
 renderNumpad();
-renderBonus();
+renderPanels();
 // 点外部收起分组下拉
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('groupMenu');
