@@ -17,7 +17,11 @@ const POOLS = {
     ],
     specials: ['签名照', '晞咘咘', '泡泡玛特盲盒'],
     // 特典名 → 图片文件名（不含扩展名）映射；未列出的同名取图片
-    specialImgs: { '签名照': '签名照', '晞咘咘': '棉花娃娃', '泡泡玛特盲盒': '泡泡玛特盲盒' },
+    specialImgs: {
+      签名照: '签名照',
+      晞咘咘: '棉花娃娃',
+      泡泡玛特盲盒: '泡泡玛特盲盒',
+    },
   },
   junuan: {
     name: '🍊 橘暖池',
@@ -31,19 +35,24 @@ const POOLS = {
       ['未公开角色卡', 'ur', 1, 2],
     ],
     specials: ['未公开亲签拍立得', '阿玛尼手链', '阿玛尼墨镜', '安热沙防晒'],
-    specialImgs: { '未公开亲签拍立得': '拍立得', '阿玛尼手链': '手链', '阿玛尼墨镜': '眼镜', '安热沙防晒': '防晒' },
+    specialImgs: {
+      未公开亲签拍立得: '拍立得',
+      阿玛尼手链: '手链',
+      阿玛尼墨镜: '眼镜',
+      安热沙防晒: '防晒',
+    },
   },
 };
 
 const RARITY_INFO = {
-  r:   { label: 'R',     icon: '🎵' },
-  pr:  { label: 'PR',    icon: '📸' },
-  sr:  { label: 'SR',    icon: '👗' },
-  ssr: { label: 'SSR',   icon: '💎' },
-  ur:  { label: 'UR',    icon: '🏆' },
-  hr:  { label: 'HR',    icon: '🎴' },
-  sp:  { label: 'SP',    icon: '✨' },
-  ex:  { label: '特典',   icon: '🎁' },
+  r: { label: 'R', icon: '🎵' },
+  pr: { label: 'PR', icon: '📸' },
+  sr: { label: 'SR', icon: '👗' },
+  ssr: { label: 'SSR', icon: '💎' },
+  ur: { label: 'UR', icon: '🏆' },
+  hr: { label: 'HR', icon: '🎴' },
+  sp: { label: 'SP', icon: '✨' },
+  ex: { label: '特典', icon: '🎁' },
 };
 
 // 稳定渲染顺序
@@ -72,11 +81,25 @@ function poolCards(pool) {
   for (const [type, rarity, start, end] of def.ranges) {
     for (let n = start; n <= end; n++) {
       const id = rarity + n;
-      cards.push({ id, type, rarity, num: n, name: type, img: numberedImgPath(pool, id) });
+      cards.push({
+        id,
+        type,
+        rarity,
+        num: n,
+        name: type,
+        img: numberedImgPath(pool, id),
+      });
     }
   }
   def.specials.forEach((name, i) => {
-    cards.push({ id: 'ex' + (i + 1), type: '特典', rarity: 'ex', num: i + 1, name, img: specialImgPath(pool, name) });
+    cards.push({
+      id: 'ex' + (i + 1),
+      type: '特典',
+      rarity: 'ex',
+      num: i + 1,
+      name,
+      img: specialImgPath(pool, name),
+    });
   });
   _poolCardsCache[pool] = cards;
   return cards;
@@ -113,16 +136,19 @@ let cardCounts = { xiari: {}, junuan: {} };
 let history = [];
 let cardImages = { xiari: {}, junuan: {} };
 
-// 个人满赠档位（双池合计抽数，按下单 id 合并计算）— 共 16 张奖励卡
+// 个人满赠档位 — pool 字段为空=双池合计判定；指定 pool=单池抽数判定
+// TR1=夏日池10抽, TR2=橘暖池10抽；其余按双池合计
 const PERSONAL_BONUS = [
-  { draws: 20,  rewards: ['TR3'] },
-  { draws: 30,  rewards: ['TR4'] },
-  { draws: 40,  rewards: ['TR5', 'TR6'] },
-  { draws: 50,  rewards: ['TR7'] },
-  { draws: 60,  rewards: ['TR8'] },
-  { draws: 70,  rewards: ['TR9'] },
-  { draws: 80,  rewards: ['TR10'] },
-  { draws: 90,  rewards: ['TR11'] },
+  { draws: 10, rewards: ['TR1'], pool: 'xiari' },
+  { draws: 10, rewards: ['TR2'], pool: 'junuan' },
+  { draws: 20, rewards: ['TR3'] },
+  { draws: 30, rewards: ['TR4'] },
+  { draws: 40, rewards: ['TR5', 'TR6'] },
+  { draws: 50, rewards: ['TR7'] },
+  { draws: 60, rewards: ['TR8'] },
+  { draws: 70, rewards: ['TR9'] },
+  { draws: 80, rewards: ['TR10'] },
+  { draws: 90, rewards: ['TR11'] },
   { draws: 120, rewards: ['白瓷卡'] },
   { draws: 150, rewards: ['水敏卡'] },
   { draws: 180, rewards: ['仿真cd'] },
@@ -131,29 +157,71 @@ const PERSONAL_BONUS = [
   { draws: 270, rewards: ['仿真拍立得2'] },
   { draws: 300, rewards: ['许愿卡'] },
 ];
-const PERSONAL_BONUS_TOTAL = 16; // TR5+TR6 双解锁
+const PERSONAL_BONUS_TOTAL = 18; // TR1+TR2+TR5+TR6 等
+
+// 奖励卡名 → 图片文件名映射（不含扩展名）
+const REWARD_IMGS = {
+  TR1: 'tr1',
+  TR2: 'tr2',
+  TR3: 'tr3',
+  TR4: 'tr4',
+  TR5: 'tr5',
+  TR6: 'tr6',
+  TR7: 'tr7',
+  TR8: 'tr8',
+  TR9: 'tr9',
+  TR10: 'tr10',
+  TR11: 'tr11',
+  TR12: 'tr12',
+  白瓷卡: 'tr12',
+  水敏卡: '水敏卡',
+  仿真cd: '仿真cd',
+  卡套: '卡套',
+  仿真拍立得1: '仿真拍立得',
+  仿真拍立得2: '仿真拍立得2',
+  许愿卡: '许愿卡',
+  特典卡1: '特典1',
+  特典卡2: '特典 2',
+  特典卡3: '特典 3',
+  特典卡4: '特典 4',
+  特典卡5: '特典 5',
+  特典卡6: '特典 6',
+  特典卡7: '特典 7',
+  限时卡1: '限时1',
+  限时卡2: '限时2',
+  限时卡3: '限时3',
+  宣传卡: '宣传',
+};
+function rewardImg(name) {
+  const dir = name.startsWith('特典') ? '全员满赠'
+    : (name.startsWith('限时') || name.startsWith('宣传')) ? '额外奖励'
+    : '个人满赠';
+  return `images/${dir}/${REWARD_IMGS[name] || name}.jpg`;
+}
 
 // 全员满赠档位（全员抽数达标 + 个人双池合计>10抽 才解锁）— 特典卡1-7
 const GLOBAL_BONUS = [
-  { draws: 30000,  card: '特典卡1' },
-  { draws: 60000,  card: '特典卡2' },
-  { draws: 90000,  card: '特典卡3' },
+  { draws: 30000, card: '特典卡1' },
+  { draws: 60000, card: '特典卡2' },
+  { draws: 90000, card: '特典卡3' },
   { draws: 120000, card: '特典卡4' },
   { draws: 150000, card: '特典卡5' },
   { draws: 180000, card: '特典卡6' },
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 0;
+const GLOBAL_TOTAL_DRAWS = 2100000;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
 let currentTab = 'collection';
 let groupMode = 'type'; // 'rarity' | 'type'
-let ocrCounts = {};   // OCR检测到的每张卡的数量 { pr2: 2, r3: 1 }
+let ocrCounts = {}; // OCR检测到的每张卡的数量 { pr2: 2, r3: 1 }
 let ocrSelected = {}; // 用户调整后的数量 { pr2: 2, r3: 1 }，0 表示剔除
 let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
 let modalCard = null;
+// 额外奖励（限时礼 / 宣传礼）用户确认状态
+let extraRewards = { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
 
 // ==================== PERSISTENCE ====================
 function loadData() {
@@ -162,7 +230,8 @@ function loadData() {
     cardCounts = d.cardCounts || { xiari: {}, junuan: {} };
     history = d.history || [];
     cardImages = d.cardImages || { xiari: {}, junuan: {} };
-  } catch(e) {}
+    extraRewards = d.extraRewards || { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
+  } catch (e) {}
   // 迁移：删除新卡池中不存在的旧 id（如旧 xiari 的 r9/r10/r11）
   for (const pool of ['xiari', 'junuan']) {
     const valid = new Set(poolIDs(pool));
@@ -179,13 +248,22 @@ function loadData() {
   }
 }
 function saveData() {
-  localStorage.setItem('ccg2_data', JSON.stringify({ cardCounts, history, cardImages, version: 3 }));
+  localStorage.setItem(
+    'ccg2_data',
+    JSON.stringify({ cardCounts, history, cardImages, extraRewards, version: 3 }),
+  );
 }
 
 // ==================== HELPERS ====================
-function catOf(id) { return id.replace(/\d+/, ''); }
-function numOf(id) { return parseInt(id.replace(/[a-zA-Z]+/, '')); }
-function cardInfo(id) { return cardByID(currentPool, id); }
+function catOf(id) {
+  return id.replace(/\d+/, '');
+}
+function numOf(id) {
+  return parseInt(id.replace(/[a-zA-Z]+/, ''));
+}
+function cardInfo(id) {
+  return cardByID(currentPool, id);
+}
 
 // 双池合计抽数（按下单 id 合并计算，即所有卡的计数总和）
 function totalDraws() {
@@ -218,12 +296,22 @@ function poolTotalCount() {
   }
   return count;
 }
-// 个人满赠已解锁奖励卡数（自动：双池合计达到档位即解锁该档全部奖励）
+// 单池抽数
+function poolDraws(pool) {
+  let n = 0;
+  for (const cnt of Object.values(cardCounts[pool] || {})) n += cnt;
+  return n;
+}
+// 个人满赠档位是否解锁：单池档位按该池抽数，双池档位按合计
+function personalTierUnlocked(m) {
+  const val = m.pool ? poolDraws(m.pool) : totalDraws();
+  return val >= m.draws;
+}
+// 个人满赠已解锁奖励卡数
 function personalUnlockedCount() {
-  const total = totalDraws();
   let n = 0;
   for (const m of PERSONAL_BONUS) {
-    if (total >= m.draws) n += m.rewards.length;
+    if (personalTierUnlocked(m)) n += m.rewards.length;
   }
   return n;
 }
@@ -236,24 +324,51 @@ function globalUnlockedCount() {
   }
   return n;
 }
+// 限时卡是否解锁（按用户确认的下单时段）
+function limitedUnlocked(name) {
+  const t = extraRewards.限时时段;
+  if (!t) return false;
+  const set = t === '0-2' ? ['限时卡1', '限时卡2', '限时卡3']
+    : t === '3-6' ? ['限时卡1', '限时卡2']
+    : t === '7-24' ? ['限时卡3'] : [];
+  return set.includes(name);
+}
+// 宣传卡是否解锁（有抽卡记录 + 用户自勾达标）
+function promoUnlocked() {
+  return totalDraws() > 0 && !!extraRewards.宣传达标;
+}
 
 // ==================== POOL & TAB ====================
 function switchPool(pool) {
   currentPool = pool;
-  document.querySelectorAll('.pool-tab').forEach(b => b.classList.toggle('active', b.dataset.pool === pool));
-  renderCollection(); updateStats(); renderPanels();
+  document
+    .querySelectorAll('.pool-tab')
+    .forEach(b => b.classList.toggle('active', b.dataset.pool === pool));
+  renderCollection();
+  updateStats();
+  renderPanels();
   if (currentTab === 'entry') renderEntry();
 }
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
-  const p = document.getElementById('tab-' + tab); if (p) p.classList.add('active');
-  const b = document.querySelector(`.tab-item[data-tab="${tab}"]`); if (b) b.classList.add('active');
+  document
+    .querySelectorAll('.tab-page')
+    .forEach(p => p.classList.remove('active'));
+  document
+    .querySelectorAll('.tab-item')
+    .forEach(t => t.classList.remove('active'));
+  const p = document.getElementById('tab-' + tab);
+  if (p) p.classList.add('active');
+  const b = document.querySelector(`.tab-item[data-tab="${tab}"]`);
+  if (b) b.classList.add('active');
   // 分组切换图标仅在收藏页显示
   const gm = document.getElementById('groupMenu');
-  if (gm) gm.style.display = (tab === 'collection') ? '' : 'none';
-  if (tab === 'collection') { renderCollection(); updateStats(); renderPanels(); }
+  if (gm) gm.style.display = tab === 'collection' ? '' : 'none';
+  if (tab === 'collection') {
+    renderCollection();
+    updateStats();
+    renderPanels();
+  }
   if (tab === 'history') renderHistory();
   if (tab === 'entry' && currentSubTab === 'input') renderEntry();
 }
@@ -262,9 +377,14 @@ function switchTab(tab) {
 let currentSubTab = 'input';
 function switchSubTab(sub) {
   currentSubTab = sub;
-  document.querySelectorAll('.sub-tab').forEach(t => t.classList.toggle('active', t.dataset.sub === sub));
-  document.querySelectorAll('.sub-page').forEach(p => p.classList.remove('active'));
-  const p = document.getElementById('sub-' + sub); if (p) p.classList.add('active');
+  document
+    .querySelectorAll('.sub-tab')
+    .forEach(t => t.classList.toggle('active', t.dataset.sub === sub));
+  document
+    .querySelectorAll('.sub-page')
+    .forEach(p => p.classList.remove('active'));
+  const p = document.getElementById('sub-' + sub);
+  if (p) p.classList.add('active');
   if (sub === 'input') renderEntry();
 }
 
@@ -310,7 +430,9 @@ function updateStats() {
 
 // 渲染所有进度板块
 function renderPanels() {
-  renderOverview(); renderBonus(); renderRewardPool();
+  renderOverview();
+  renderBonus();
+  renderRewardPool();
 }
 
 // ==================== REWARD POOL (奖励卡池) ====================
@@ -323,22 +445,41 @@ function renderRewardPool() {
   // 个人满赠奖励卡
   const personalCards = [];
   PERSONAL_BONUS.forEach(m => {
-    const unlocked = total >= m.draws;
-    m.rewards.forEach(name => personalCards.push({ name, source: '个人满赠', tier: m.draws, unlocked }));
+    const unlocked = personalTierUnlocked(m);
+    const tierLabel = m.pool
+      ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}池${m.draws}抽`
+      : `${m.draws}抽`;
+    m.rewards.forEach(name =>
+      personalCards.push({
+        name,
+        source: '个人满赠',
+        tier: tierLabel,
+        unlocked,
+      }),
+    );
   });
   // 全员满赠奖励卡
   const globalCards = GLOBAL_BONUS.map(m => ({
-    name: m.card, source: '全员满赠', tier: m.draws,
+    name: m.card,
+    source: '全员满赠',
+    tier: fmtWan(m.draws) + '抽',
     unlocked: GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible,
   }));
 
   const renderGroup = (title, sub, cards, colorClass) => {
-    const cells = cards.map(c => `
-      <div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}">
-        <div class="reward-ph">${c.unlocked ? '🎁' : '🔒'}</div>
+    const cells = cards
+      .map(c => {
+        const img = rewardImg(c.name);
+        const phHTML = c.unlocked
+          ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
+          : `<span class="reward-ph">🔒</span>`;
+        return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}">
+        <div class="reward-ph-wrap">${phHTML}</div>
         <div class="reward-name">${c.name}</div>
-        <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier + '抽'}</div>
-      </div>`).join('');
+        <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
+      </div>`;
+      })
+      .join('');
     return `<div class="reward-group">
       <div class="reward-group-head"><span>${title}</span><span class="reward-group-sub">${sub}</span></div>
       <div class="reward-grid">${cells}</div>
@@ -348,10 +489,45 @@ function renderRewardPool() {
   const pUnlocked = personalCards.filter(c => c.unlocked).length;
   const gUnlocked = globalCards.filter(c => c.unlocked).length;
 
+  // 限时礼 / 宣传礼（带确认按钮的分组）
+  const limitedCards = [
+    { name: '限时卡1', tier: '0-2h / 3-6h', unlocked: limitedUnlocked('限时卡1') },
+    { name: '限时卡2', tier: '0-2h / 3-6h', unlocked: limitedUnlocked('限时卡2') },
+    { name: '限时卡3', tier: '0-2h / 7-24h', unlocked: limitedUnlocked('限时卡3') },
+  ];
+  const promoCards = [
+    { name: '宣传卡', tier: '达标+有记录', unlocked: promoUnlocked() },
+  ];
+  const lUnlocked = limitedCards.filter(c => c.unlocked).length;
+  const rUnlocked = promoCards.filter(c => c.unlocked).length;
+  const lConfirmed = !!extraRewards.限时时段;
+  const rConfirmed = !!extraRewards.宣传达标;
+
+  const renderConfirmGroup = (title, sub, cards, colorClass, confirmed, onConfirm) => `
+    <div class="reward-group">
+      <div class="reward-group-head">
+        <span>${title}</span>
+        <button class="reward-confirm-btn${confirmed ? ' done' : ''}" onclick="${onConfirm}">${confirmed ? '已确认 ✓' : '去确认'}</button>
+      </div>
+      <div class="reward-grid">${cards.map(c => {
+        const img = rewardImg(c.name);
+        const phHTML = c.unlocked
+          ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
+          : `<span class="reward-ph">🔒</span>`;
+        return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}">
+          <div class="reward-ph-wrap">${phHTML}</div>
+          <div class="reward-name">${c.name}</div>
+          <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+
   panel.innerHTML = `
     <div class="panel-title">🏆 奖励卡池 <span class="panel-sub">满赠自动解锁，不可手动加减</span></div>
     ${renderGroup('🎁 个人满赠', `${pUnlocked}/${PERSONAL_BONUS_TOTAL}`, personalCards, 'rw-personal')}
     ${renderGroup('🌍 全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
+    ${renderConfirmGroup('🍏 限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
+    ${renderConfirmGroup('🍉 宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
   `;
 }
 
@@ -363,7 +539,7 @@ function renderOverview() {
   const collected = collectedCount();
   const poolTotal = poolTotalCount();
   const rewardUnlocked = personalUnlockedCount() + globalUnlockedCount();
-  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length; // 16 + 7 = 23
+  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length; // 18 + 7 = 25
 
   const poolPct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
   const rewardPct = Math.round((rewardUnlocked / rewardTotal) * 100);
@@ -386,20 +562,35 @@ function renderOverview() {
         <div class="ov-num">${rewardUnlocked}<span class="ov-slash">/${rewardTotal}</span></div>
         <div class="ov-bar-wrap"><div class="ov-bar reward" style="width:${rewardPct}%"></div></div>
         <div class="ov-pct">${rewardPct}%</div>
+        <div class="ov-note">仅含满赠，限时/宣传礼另计</div>
       </div>
     </div>
   `;
 }
 
 // ==================== BONUS (个人 + 全员 满赠) ====================
+// 个人下一档：所有未解锁档位中，还差抽数最少的（单池档按该池，双池档按合计）
 function nextPersonalTier() {
   const total = totalDraws();
-  return PERSONAL_BONUS.find(m => total < m.draws) || null;
+  let best = null,
+    bestGap = Infinity;
+  for (const m of PERSONAL_BONUS) {
+    const val = m.pool ? poolDraws(m.pool) : total;
+    if (val >= m.draws) continue; // 已解锁
+    const gap = m.draws - val;
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = m;
+    }
+  }
+  return best;
 }
 function nextGlobalTier() {
   return GLOBAL_BONUS.find(m => GLOBAL_TOTAL_DRAWS < m.draws) || null;
 }
-function fmtWan(n) { return (n / 10000) + '万'; }
+function fmtWan(n) {
+  return n / 10000 + '万';
+}
 
 function renderBonus() {
   const panel = document.getElementById('bonusPanel');
@@ -413,12 +604,16 @@ function renderBonus() {
   const pNext = nextPersonalTier();
   let pCard;
   if (pNext) {
-    const pct = Math.min(100, Math.round((total / pNext.draws) * 100));
+    const pVal = pNext.pool ? poolDraws(pNext.pool) : total;
+    const pct = Math.min(100, Math.round((pVal / pNext.draws) * 100));
+    const pLabel = pNext.pool
+      ? `${pNext.pool === 'xiari' ? '夏日' : '橘暖'}池${pNext.draws}`
+      : `${pNext.draws}`;
     pCard = `<div class="bn-next">
-      <div class="bn-next-head"><span class="bn-next-label">下一档</span><span class="bn-next-draws">${pNext.draws}抽</span></div>
+      <div class="bn-next-head"><span class="bn-next-label">下一档</span><span class="bn-next-draws">${pLabel}抽</span></div>
       <div class="bn-next-reward">🔒 ${pNext.rewards.join(' + ')}</div>
       <div class="bn-bar-wrap"><div class="bn-bar" style="width:${pct}%"></div></div>
-      <div class="bn-next-foot"><span>${total}/${pNext.draws}</span><span>还差 ${pNext.draws - total} 抽</span></div>
+      <div class="bn-next-foot"><span>${pVal}/${pNext.draws}</span><span>还差 ${pNext.draws - pVal} 抽</span></div>
     </div>`;
   } else {
     pCard = `<div class="bn-next done"><div class="bn-next-reward">✅ 全部解锁</div></div>`;
@@ -428,9 +623,16 @@ function renderBonus() {
   const gNext = nextGlobalTier();
   let gCard;
   if (gNext) {
-    const pct = Math.min(100, Math.round((GLOBAL_TOTAL_DRAWS / gNext.draws) * 100));
+    const pct = Math.min(
+      100,
+      Math.round((GLOBAL_TOTAL_DRAWS / gNext.draws) * 100),
+    );
     const blocked = GLOBAL_TOTAL_DRAWS >= gNext.draws && !personalEligible;
-    const foot = blocked ? `待个人 > ${GLOBAL_PERSONAL_MIN} 抽` : (personalEligible ? `还差 ${fmtWan(gNext.draws - GLOBAL_TOTAL_DRAWS)}` : `还需个人 > ${GLOBAL_PERSONAL_MIN} 抽`);
+    const foot = blocked
+      ? `待个人 > ${GLOBAL_PERSONAL_MIN} 抽`
+      : personalEligible
+        ? `还差 ${fmtWan(gNext.draws - GLOBAL_TOTAL_DRAWS)}`
+        : `还需个人 > ${GLOBAL_PERSONAL_MIN} 抽`;
     gCard = `<div class="bn-next">
       <div class="bn-next-head"><span class="bn-next-label">下一档</span><span class="bn-next-draws">${fmtWan(gNext.draws)}抽</span></div>
       <div class="bn-next-reward">🔒 ${gNext.card}</div>
@@ -464,33 +666,46 @@ function openBonusDetail(type) {
 
   if (type === 'personal') {
     title = '🎁 个人满赠详情';
-    body = `<div class="bm-sub">双池合计 ${total} 抽 · 已解锁 ${personalUnlockedCount()}/${PERSONAL_BONUS_TOTAL}</div>`;
+    body = `<div class="bm-sub">双池合计 ${total} 抽（夏日 ${poolDraws('xiari')} / 橘暖 ${poolDraws('junuan')}）· 已解锁 ${personalUnlockedCount()}/${PERSONAL_BONUS_TOTAL}</div>`;
     body += PERSONAL_BONUS.map(m => {
-      const unlocked = total >= m.draws;
-      const pct = Math.min(100, Math.round((total / m.draws) * 100));
-      const countText = unlocked ? `${m.rewards.length}张已解锁` : `${total}/${m.draws}`;
-      return `<div class="ms-row ${unlocked?'done':''}">
-        <span class="ms-label">${m.draws}抽</span>
-        <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked?' done':''}" style="width:${pct}%"></div></div>
-        <span class="ms-reward">${unlocked?'✅ ':'🔒 '}${m.rewards.join(' + ')}</span>
+      const unlocked = personalTierUnlocked(m);
+      const val = m.pool ? poolDraws(m.pool) : total;
+      const label = m.pool
+        ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}${m.draws}`
+        : `${m.draws}`;
+      const pct = Math.min(100, Math.round((val / m.draws) * 100));
+      const countText = unlocked
+        ? `${m.rewards.length}张已解锁`
+        : `${val}/${m.draws}`;
+      return `<div class="ms-row ${unlocked ? 'done' : ''}">
+        <span class="ms-label">${label}抽</span>
+        <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked ? ' done' : ''}" style="width:${pct}%"></div></div>
+        <span class="ms-reward">${unlocked ? '✅ ' : '🔒 '}${m.rewards.join(' + ')}</span>
         <span class="ms-count">${countText}</span>
       </div>`;
     }).join('');
   } else {
     title = '🌍 全员满赠详情';
-    body = `<div class="bm-sub">全员抽数 ${fmtWan(GLOBAL_TOTAL_DRAWS)} · 个人 ${total} 抽${personalEligible?'':'（未达 ' + GLOBAL_PERSONAL_MIN + ' 抽门槛）'} · 已解锁 ${globalUnlockedCount()}/${GLOBAL_BONUS.length}</div>`;
+    body = `<div class="bm-sub">全员抽数 ${fmtWan(GLOBAL_TOTAL_DRAWS)} · 个人 ${total} 抽${personalEligible ? '' : '（未达 ' + GLOBAL_PERSONAL_MIN + ' 抽门槛）'} · 已解锁 ${globalUnlockedCount()}/${GLOBAL_BONUS.length}</div>`;
     if (!personalEligible) {
       body += `<div class="ms-hint">⚠️ 全员达标后还需个人双池合计 &gt; ${GLOBAL_PERSONAL_MIN} 抽才有资格解锁</div>`;
     }
     body += GLOBAL_BONUS.map(m => {
       const globalDone = GLOBAL_TOTAL_DRAWS >= m.draws;
       const unlocked = globalDone && personalEligible;
-      const pct = Math.min(100, Math.round((GLOBAL_TOTAL_DRAWS / m.draws) * 100));
-      const countText = unlocked ? '已解锁' : (globalDone ? '待个人达标' : `${fmtWan(GLOBAL_TOTAL_DRAWS)}/${fmtWan(m.draws)}`);
-      return `<div class="ms-row ${unlocked?'done':''}">
+      const pct = Math.min(
+        100,
+        Math.round((GLOBAL_TOTAL_DRAWS / m.draws) * 100),
+      );
+      const countText = unlocked
+        ? '已解锁'
+        : globalDone
+          ? '待个人达标'
+          : `${fmtWan(GLOBAL_TOTAL_DRAWS)}/${fmtWan(m.draws)}`;
+      return `<div class="ms-row ${unlocked ? 'done' : ''}">
         <span class="ms-label">${fmtWan(m.draws)}抽</span>
-        <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked?' done':''}" style="width:${pct}%"></div></div>
-        <span class="ms-reward">${unlocked?'✅ ':'🔒 '}${m.card}</span>
+        <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked ? ' done' : ''}" style="width:${pct}%"></div></div>
+        <span class="ms-reward">${unlocked ? '✅ ' : '🔒 '}${m.card}</span>
         <span class="ms-count">${countText}</span>
       </div>`;
     }).join('');
@@ -502,6 +717,62 @@ function openBonusDetail(type) {
 }
 function closeBonusModal() {
   document.getElementById('bonusModal').style.display = 'none';
+}
+
+// ==================== 额外奖励确认（限时礼 / 宣传礼）====================
+let extraModalMode = null; // 'limited' | 'promo'
+const LIMITED_TIERS = [
+  { key: '0-2',  label: '开售 0-2 小时',  rewards: '限时卡1、2、3' },
+  { key: '3-6',  label: '开售 3-6 小时',  rewards: '限时卡1、2' },
+  { key: '7-24', label: '开售 7-24 小时', rewards: '限时卡3' },
+];
+
+function openLimitedConfirm() {
+  extraModalMode = 'limited';
+  const cur = extraRewards.限时时段;
+  const opts = LIMITED_TIERS.map(t => `
+    <label class="extra-opt ${cur === t.key ? 'active' : ''}" data-val="${t.key}">
+      <input type="radio" name="limitedTier" value="${t.key}" ${cur === t.key ? 'checked' : ''}>
+      <div class="extra-opt-main"><div class="extra-opt-label">${t.label}</div><div class="extra-opt-sub">赠 ${t.rewards}</div></div>
+    </label>`).join('');
+  document.getElementById('extraModalTitle').textContent = '🍏 限时礼';
+  document.getElementById('extraModalBody').innerHTML = `
+    <div class="bm-sub">选择你的下单时段，解锁对应限时卡</div>
+    <div class="extra-opts">${opts}</div>`;
+  document.getElementById('extraModal').style.display = 'flex';
+}
+
+function openPromoConfirm() {
+  extraModalMode = 'promo';
+  const hasRecord = totalDraws() > 0;
+  const cur = extraRewards;
+  document.getElementById('extraModalTitle').textContent = '🍉 宣传礼';
+  document.getElementById('extraModalBody').innerHTML = `
+    <div class="bm-sub">在 xhs/dy/ks 发布奇妙浆果园 ccl 相关内容并满 52👍，且需有盲盒下单记录</div>
+    ${hasRecord ? '' : '<div class="ms-hint">⚠️ 当前无抽卡记录，需先在录入页添加至少 1 张卡</div>'}
+    <label class="extra-opt ${cur.宣传达标 ? 'active' : ''}" data-val="promo">
+      <input type="checkbox" id="promoDone" ${cur.宣传达标 ? 'checked' : ''} ${hasRecord ? '' : 'disabled'}>
+      <div class="extra-opt-main"><div class="extra-opt-label">宣传已达标（满 52👍）</div></div>
+    </label>`;
+  document.getElementById('extraModal').style.display = 'flex';
+}
+
+function confirmExtraModal() {
+  if (extraModalMode === 'limited') {
+    const checked = document.querySelector('input[name="limitedTier"]:checked');
+    extraRewards.限时时段 = checked ? checked.value : null;
+  } else if (extraModalMode === 'promo') {
+    extraRewards.宣传达标 = !!document.getElementById('promoDone').checked;
+  }
+  saveData();
+  closeExtraModal();
+  renderRewardPool();
+  showToast('✅ 已保存');
+}
+
+function closeExtraModal() {
+  document.getElementById('extraModal').style.display = 'none';
+  extraModalMode = null;
 }
 
 // ==================== COLLECTION ====================
@@ -516,8 +787,11 @@ function closeGroupMenu() {
 }
 function setGroupMode(mode) {
   groupMode = mode;
-  document.getElementById('groupIconLabel').textContent = (mode === 'rarity') ? '📊' : '🏷️';
-  document.querySelectorAll('.group-option').forEach(o => o.classList.toggle('active', o.dataset.group === mode));
+  document.getElementById('groupIconLabel').textContent =
+    mode === 'rarity' ? '📊' : '🏷️';
+  document
+    .querySelectorAll('.group-option')
+    .forEach(o => o.classList.toggle('active', o.dataset.group === mode));
   closeGroupMenu();
   renderCollection();
   updateStats();
@@ -557,22 +831,25 @@ function renderCollection() {
     const total = g.cards.length;
     const collected = g.cards.filter(card => (c[card.id] || 0) > 0).length;
     const allDone = collected === total;
-    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}<span class="group-count${allDone?' all':''}">${collected}/${total}</span></div><div class="card-grid">`;
-    html += g.cards.map(card => {
-      const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
-      const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
-      const imgSrc = (imgs && imgs.front) || card.img;
-      const imgHTML = imgSrc
-        ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
-        : `<span>${idText}</span>`;
-      const nameText = card.rarity === 'ex' ? card.name : card.name;
-      return `<div class="card-cell ${card.rarity} ${(c[card.id]||0)>0?'has':'zero'}" data-count="${c[card.id]||0}" onclick="openModal('${card.id}')">
-        <div class="placeholder">${imgHTML}</div>
+    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}<span class="group-count${allDone ? ' all' : ''}">${collected}/${total}</span></div><div class="card-grid">`;
+    html += g.cards
+      .map(card => {
+        const imgs =
+          cardImages[currentPool] && cardImages[currentPool][card.id];
+        const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
+        const imgSrc = (imgs && imgs.front) || card.img;
+        const imgHTML = imgSrc
+          ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
+          : `<span>${idText}</span>`;
+        const nameText = card.rarity === 'ex' ? card.name : card.name;
+        return `<div class="card-cell ${card.rarity} ${(c[card.id] || 0) > 0 ? 'has' : 'zero'}" data-count="${c[card.id] || 0}" onclick="openModal('${card.id}')">
+        <div class="placeholder" data-cid="${idText}">${imgHTML}</div>
         <div class="cid">${idText}</div>
         <div class="cname">${nameText}</div>
-        <div class="badge">${c[card.id]||0}</div>
+        <div class="badge">${c[card.id] || 0}</div>
       </div>`;
-    }).join('');
+      })
+      .join('');
     html += '</div></div>';
   }
   grid.innerHTML = html;
@@ -585,9 +862,11 @@ function openModal(id) {
   const card = cardByID(currentPool, id);
   if (!card) return;
 
-  document.getElementById('modalCid').textContent = card.rarity === 'ex' ? '★' : id.toUpperCase();
+  document.getElementById('modalCid').textContent =
+    card.rarity === 'ex' ? '★' : id.toUpperCase();
   document.getElementById('modalName').textContent = card.name;
-  document.getElementById('modalRarity').textContent = `${RARITY_INFO[card.rarity].icon} ${RARITY_INFO[card.rarity].label}`;
+  document.getElementById('modalRarity').textContent =
+    `${RARITY_INFO[card.rarity].icon} ${RARITY_INFO[card.rarity].label}`;
   document.getElementById('modalCount').textContent = c[id] || 0;
 
   const front = document.getElementById('modalFront');
@@ -596,13 +875,20 @@ function openModal(id) {
   const imgSrc = (imgs && imgs.front) || card.img;
   const frontImg = document.getElementById('modalFrontImg');
   if (imgSrc) {
-    frontImg.src = imgSrc; frontImg.style.display='block';
-    frontImg.onerror = function() { this.style.display='none'; document.getElementById('modalFrontPH').style.display='flex'; document.getElementById('modalFrontPH').textContent = card.rarity === 'ex' ? '🎁' : (RARITY_INFO[card.rarity].icon || '🃏'); };
-    document.getElementById('modalFrontPH').style.display='none';
+    frontImg.src = imgSrc;
+    frontImg.style.display = 'block';
+    frontImg.onerror = function () {
+      this.style.display = 'none';
+      document.getElementById('modalFrontPH').style.display = 'flex';
+      document.getElementById('modalFrontPH').textContent =
+        card.rarity === 'ex' ? '🎁' : RARITY_INFO[card.rarity].icon || '🃏';
+    };
+    document.getElementById('modalFrontPH').style.display = 'none';
   } else {
-    frontImg.style.display='none';
-    document.getElementById('modalFrontPH').style.display='block';
-    document.getElementById('modalFrontPH').textContent = card.rarity === 'ex' ? '🎁' : (RARITY_INFO[card.rarity].icon || '🃏');
+    frontImg.style.display = 'none';
+    document.getElementById('modalFrontPH').style.display = 'block';
+    document.getElementById('modalFrontPH').textContent =
+      card.rarity === 'ex' ? '🎁' : RARITY_INFO[card.rarity].icon || '🃏';
   }
   document.getElementById('cardModal').style.display = 'flex';
 }
@@ -616,9 +902,18 @@ let tessWorker = null;
 
 // 中文卡名 → 稀有度映射（仅保留中文卡牌类型名，不含英文缩写以避免子串误匹配）
 const CN_CAT_MAP = {
-  '日常卡': 'r', '音乐卡': 'sr', '涂鸦卡': 'ssr', '路透卡': 'pr', '拍立得': 'ur',
-  '镂空卡': 'hr', '衣料卡': 'hr',
-  '角色卡': 'r', '拼图卡': 'sr', '月历卡': 'ssr', '工艺卡': 'sp', '未公开角色卡': 'ur',
+  日常卡: 'r',
+  音乐卡: 'sr',
+  涂鸦卡: 'ssr',
+  路透卡: 'pr',
+  拍立得: 'ur',
+  镂空卡: 'hr',
+  衣料卡: 'hr',
+  角色卡: 'r',
+  拼图卡: 'sr',
+  月历卡: 'ssr',
+  工艺卡: 'sp',
+  未公开角色卡: 'ur',
 };
 
 // 中文卡名 + 数字 正则（宽松匹配，允许中间有分隔符）
@@ -640,7 +935,7 @@ const CN_CARD_PATTERNS = [
 // 图片预处理：放大+增强对比度
 function preprocessImage(imgData, callback) {
   const img = new Image();
-  img.onload = function() {
+  img.onload = function () {
     const canvas = document.createElement('canvas');
     const scale = Math.max(2.0, 1500 / img.width);
     canvas.width = img.width * scale;
@@ -651,9 +946,9 @@ function preprocessImage(imgData, callback) {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const d = imageData.data;
     for (let i = 0; i < d.length; i += 4) {
-      const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
       const enhanced = Math.min(255, Math.max(0, (gray - 50) * 2.0));
-      d[i] = d[i+1] = d[i+2] = enhanced;
+      d[i] = d[i + 1] = d[i + 2] = enhanced;
     }
     ctx.putImageData(imageData, 0, 0);
     callback(canvas.toDataURL('image/png'));
@@ -673,9 +968,11 @@ async function getWorker() {
       } else if (m.status === 'initializing tesseract') {
         document.getElementById('ocrStatus').textContent = '🔧 初始化...';
       } else if (m.status === 'loading language traineddata') {
-        document.getElementById('ocrStatus').textContent = '🔧 下载中文语言包...';
+        document.getElementById('ocrStatus').textContent =
+          '🔧 下载中文语言包...';
       } else if (m.status === 'recognizing text') {
-        document.getElementById('ocrStatus').textContent = `🤖 正在识别... ${Math.round(m.progress*100)}%`;
+        document.getElementById('ocrStatus').textContent =
+          `🤖 正在识别... ${Math.round(m.progress * 100)}%`;
       }
     },
   });
@@ -695,9 +992,12 @@ async function handleScreenshots(event) {
   document.getElementById('uploadPreview').classList.add('show');
   document.getElementById('ocrLoading').style.display = 'block';
   document.getElementById('ocrNumbers').innerHTML = '';
-  document.getElementById('ocrStatus').textContent = `🔧 处理 ${files.length} 张截图...`;
+  document.getElementById('ocrStatus').textContent =
+    `🔧 处理 ${files.length} 张截图...`;
   document.getElementById('ocrCount').textContent = '0';
-  ocrCounts = {}; ocrSelected = {}; ocrExpectedTotal = 0;
+  ocrCounts = {};
+  ocrSelected = {};
+  ocrExpectedTotal = 0;
 
   const accumulated = {};
   let grandExpected = 0;
@@ -706,7 +1006,8 @@ async function handleScreenshots(event) {
 
   for (let fi = 0; fi < files.length; fi++) {
     const file = files[fi];
-    document.getElementById('ocrStatus').textContent = `🤖 处理第 ${fi+1}/${files.length} 张...`;
+    document.getElementById('ocrStatus').textContent =
+      `🤖 处理第 ${fi + 1}/${files.length} 张...`;
 
     const rawImgData = await new Promise(resolve => {
       const reader = new FileReader();
@@ -717,149 +1018,167 @@ async function handleScreenshots(event) {
     if (fi === 0) document.getElementById('previewImg').src = rawImgData;
 
     await new Promise(resolve => {
-    preprocessImage(rawImgData, async (processedImgData) => {
-      const allTexts = [];
-      const allWords = [];
+      preprocessImage(rawImgData, async processedImgData => {
+        const allTexts = [];
+        const allWords = [];
 
-      try {
-        const worker = await getWorker();
+        try {
+          const worker = await getWorker();
 
-        // 第1轮：预处理图
-        document.getElementById('ocrStatus').textContent = '🤖 第1轮识别（预处理图）...';
-        const ret1 = await worker.recognize(processedImgData);
-        allTexts.push(ret1.data.text);
-        if (ret1.data.words) allWords.push(...ret1.data.words);
+          // 第1轮：预处理图
+          document.getElementById('ocrStatus').textContent =
+            '🤖 第1轮识别（预处理图）...';
+          const ret1 = await worker.recognize(processedImgData);
+          allTexts.push(ret1.data.text);
+          if (ret1.data.words) allWords.push(...ret1.data.words);
 
-        // 第2轮：原图
-        document.getElementById('ocrStatus').textContent = '🤖 第2轮识别（原图）...';
-        const ret2 = await worker.recognize(rawImgData);
-        allTexts.push(ret2.data.text);
-        if (ret2.data.words) allWords.push(...ret2.data.words);
+          // 第2轮：原图
+          document.getElementById('ocrStatus').textContent =
+            '🤖 第2轮识别（原图）...';
+          const ret2 = await worker.recognize(rawImgData);
+          allTexts.push(ret2.data.text);
+          if (ret2.data.words) allWords.push(...ret2.data.words);
 
-        const fullText = allTexts.join('\n');
-        console.log('=== OCR 原始输出 ===');
-        console.log(fullText);
-        console.log('=== 单词 ===');
-        console.log(allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '));
+          const fullText = allTexts.join('\n');
+          console.log('=== OCR 原始输出 ===');
+          console.log(fullText);
+          console.log('=== 单词 ===');
+          console.log(
+            allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
+          );
 
-        // 每个策略独立计数，最后取最大值（避免重复计数）
-        const strategyResults = [];
+          // 每个策略独立计数，最后取最大值（避免重复计数）
+          const strategyResults = [];
 
-        // === 策略A：匹配中文卡名 + 数字（最可靠）===
-        const cntA = {};
-        for (const { pattern, cat } of CN_CARD_PATTERNS) {
-          let m; pattern.lastIndex = 0;
-          while ((m = pattern.exec(fullText)) !== null) {
-            const num = parseInt(m[1]);
-            const id = cat + num;
-            if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
-          }
-        }
-        strategyResults.push(cntA);
-
-        // === 策略B：匹配英文缩写 PR1, R3, SR2 等（加 \b 词边界避免 SSR 内部匹配 SR）===
-        const cntB = {};
-        const enPatterns = [
-          /\b(pr|PR|Pr)\s*(\d{1,2})\b/g,
-          /\b(sr|SR|Sr)\s*(\d{1,2})\b/g,
-          /\b(ssr|SSR|Ssr)\s*(\d{1,2})\b/g,
-          /\b(ur|UR|Ur)\s*(\d{1,2})\b/g,
-          /\b(hr|HR|Hr)\s*(\d{1,2})\b/g,
-          /\b(sp|SP|Sp)\s*(\d{1,2})\b/g,
-          /\b(r|R)\s*(\d{1,2})\b/g,
-        ];
-        for (const pat of enPatterns) {
-          let m; pat.lastIndex = 0;
-          while ((m = pat.exec(fullText)) !== null) {
-            const cat = m[1].toLowerCase();
-            const num = parseInt(m[2]);
-            const id = cat + num;
-            if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
-          }
-        }
-        strategyResults.push(cntB);
-
-        // === 策略C：单词级（置信度 > 40）===
-        const cntC = {};
-        for (const w of allWords) {
-          if (w.confidence < 40) continue;
-          const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (validIDs.has(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
-        }
-        strategyResults.push(cntC);
-
-        // === 策略D：中文宽松匹配（仅中文卡名，避免英文缩写子串误匹配）===
-        const cntD = {};
-        const compact = fullText.replace(/[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g, '');
-        for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
-          if (cnName.length < 2) continue;
-          let idx = 0;
-          while ((idx = compact.indexOf(cnName, idx)) !== -1) {
-            const after = compact.slice(idx + cnName.length, idx + cnName.length + 3);
-            const numMatch = after.match(/^(\d{1,2})/);
-            if (numMatch) {
-              const num = parseInt(numMatch[1]);
+          // === 策略A：匹配中文卡名 + 数字（最可靠）===
+          const cntA = {};
+          for (const { pattern, cat } of CN_CARD_PATTERNS) {
+            let m;
+            pattern.lastIndex = 0;
+            while ((m = pattern.exec(fullText)) !== null) {
+              const num = parseInt(m[1]);
               const id = cat + num;
-              if (validIDs.has(id)) cntD[id] = (cntD[id] || 0) + 1;
+              if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
             }
-            idx += cnName.length;
           }
-        }
-        strategyResults.push(cntD);
+          strategyResults.push(cntA);
 
-        // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
-        let expectedTotal = 0;
-        const prizePattern = /奖品\s*(\d{1,2})/g;
-        let pm;
-        while ((pm = prizePattern.exec(fullText)) !== null) {
-          const n = parseInt(pm[1]);
-          if (n > expectedTotal) expectedTotal = n;
-        }
-        // 也检查 "Prize" 英文写法
-        const prizePatternEN = /prize\s*(\d{1,2})/gi;
-        while ((pm = prizePatternEN.exec(fullText)) !== null) {
-          const n = parseInt(pm[1]);
-          if (n > expectedTotal) expectedTotal = n;
-        }
-        console.log('检测到奖品总数: ' + expectedTotal);
-        ocrExpectedTotal = expectedTotal; // 存为全局变量
-
-        // 合并：每张卡取各策略的最大值
-        const imgCounts = {};
-        for (const id of validIDs) {
-          let maxCnt = 0;
-          for (const sr of strategyResults) {
-            if (sr[id] && sr[id] > maxCnt) maxCnt = sr[id];
+          // === 策略B：匹配英文缩写 PR1, R3, SR2 等（加 \b 词边界避免 SSR 内部匹配 SR）===
+          const cntB = {};
+          const enPatterns = [
+            /\b(pr|PR|Pr)\s*(\d{1,2})\b/g,
+            /\b(sr|SR|Sr)\s*(\d{1,2})\b/g,
+            /\b(ssr|SSR|Ssr)\s*(\d{1,2})\b/g,
+            /\b(ur|UR|Ur)\s*(\d{1,2})\b/g,
+            /\b(hr|HR|Hr)\s*(\d{1,2})\b/g,
+            /\b(sp|SP|Sp)\s*(\d{1,2})\b/g,
+            /\b(r|R)\s*(\d{1,2})\b/g,
+          ];
+          for (const pat of enPatterns) {
+            let m;
+            pat.lastIndex = 0;
+            while ((m = pat.exec(fullText)) !== null) {
+              const cat = m[1].toLowerCase();
+              const num = parseInt(m[2]);
+              const id = cat + num;
+              if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
+            }
           }
-          if (maxCnt > 0) imgCounts[id] = Math.min(maxCnt, expectedTotal || 10);
-        }
+          strategyResults.push(cntB);
 
-        // 奖品位校验修正
-        const rawTotal = Object.values(imgCounts).reduce((s,c) => s+c, 0);
-        if (expectedTotal > 0 && rawTotal > expectedTotal) {
-          const scale = expectedTotal / rawTotal;
-          for (const id of Object.keys(imgCounts)) imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
-          let adjTotal = Object.values(imgCounts).reduce((s,c) => s+c, 0);
-          const sortedIds = Object.keys(imgCounts).sort((a,b) => imgCounts[b] - imgCounts[a]);
-          for (const id of sortedIds) {
-            while (imgCounts[id] > 1 && adjTotal > expectedTotal) { imgCounts[id]--; adjTotal--; }
+          // === 策略C：单词级（置信度 > 40）===
+          const cntC = {};
+          for (const w of allWords) {
+            if (w.confidence < 40) continue;
+            const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (validIDs.has(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
           }
+          strategyResults.push(cntC);
+
+          // === 策略D：中文宽松匹配（仅中文卡名，避免英文缩写子串误匹配）===
+          const cntD = {};
+          const compact = fullText.replace(
+            /[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g,
+            '',
+          );
+          for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
+            if (cnName.length < 2) continue;
+            let idx = 0;
+            while ((idx = compact.indexOf(cnName, idx)) !== -1) {
+              const after = compact.slice(
+                idx + cnName.length,
+                idx + cnName.length + 3,
+              );
+              const numMatch = after.match(/^(\d{1,2})/);
+              if (numMatch) {
+                const num = parseInt(numMatch[1]);
+                const id = cat + num;
+                if (validIDs.has(id)) cntD[id] = (cntD[id] || 0) + 1;
+              }
+              idx += cnName.length;
+            }
+          }
+          strategyResults.push(cntD);
+
+          // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
+          let expectedTotal = 0;
+          const prizePattern = /奖品\s*(\d{1,2})/g;
+          let pm;
+          while ((pm = prizePattern.exec(fullText)) !== null) {
+            const n = parseInt(pm[1]);
+            if (n > expectedTotal) expectedTotal = n;
+          }
+          // 也检查 "Prize" 英文写法
+          const prizePatternEN = /prize\s*(\d{1,2})/gi;
+          while ((pm = prizePatternEN.exec(fullText)) !== null) {
+            const n = parseInt(pm[1]);
+            if (n > expectedTotal) expectedTotal = n;
+          }
+          console.log('检测到奖品总数: ' + expectedTotal);
+          ocrExpectedTotal = expectedTotal; // 存为全局变量
+
+          // 合并：每张卡取各策略的最大值
+          const imgCounts = {};
+          for (const id of validIDs) {
+            let maxCnt = 0;
+            for (const sr of strategyResults) {
+              if (sr[id] && sr[id] > maxCnt) maxCnt = sr[id];
+            }
+            if (maxCnt > 0)
+              imgCounts[id] = Math.min(maxCnt, expectedTotal || 10);
+          }
+
+          // 奖品位校验修正
+          const rawTotal = Object.values(imgCounts).reduce((s, c) => s + c, 0);
+          if (expectedTotal > 0 && rawTotal > expectedTotal) {
+            const scale = expectedTotal / rawTotal;
+            for (const id of Object.keys(imgCounts))
+              imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
+            let adjTotal = Object.values(imgCounts).reduce((s, c) => s + c, 0);
+            const sortedIds = Object.keys(imgCounts).sort(
+              (a, b) => imgCounts[b] - imgCounts[a],
+            );
+            for (const id of sortedIds) {
+              while (imgCounts[id] > 1 && adjTotal > expectedTotal) {
+                imgCounts[id]--;
+                adjTotal--;
+              }
+            }
+          }
+
+          // 累加到全局
+          for (const [id, cnt] of Object.entries(imgCounts)) {
+            accumulated[id] = (accumulated[id] || 0) + cnt;
+          }
+          grandExpected += expectedTotal;
+          allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
+        } catch (err) {
+          console.error(`第${fi + 1}张识别失败:`, err);
         }
 
-        // 累加到全局
-        for (const [id, cnt] of Object.entries(imgCounts)) {
-          accumulated[id] = (accumulated[id] || 0) + cnt;
-        }
-        grandExpected += expectedTotal;
-        allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
-
-      } catch(err) {
-        console.error(`第${fi+1}张识别失败:`, err);
-      }
-
-      document.getElementById('ocrLoading').style.display = 'none';
-      resolve();
-    });
+        document.getElementById('ocrLoading').style.display = 'none';
+        resolve();
+      });
     }); // end preprocessImage + Promise
   } // end for loop
 
@@ -872,7 +1191,7 @@ async function handleScreenshots(event) {
     if (cnt > 0) ocrSelected[id] = cnt;
   }
 
-  const finalTotal = Object.values(ocrCounts).reduce((s,c) => s+c, 0);
+  const finalTotal = Object.values(ocrCounts).reduce((s, c) => s + c, 0);
   const debugInfo = allDebug.join(' | ').slice(0, 200);
 
   if (finalTotal === 0) {
@@ -880,7 +1199,7 @@ async function handleScreenshots(event) {
       `⚠️ 处理了 ${files.length} 张截图，未识别到卡号<br><small style="font-size:10px;">${debugInfo}...</small>`;
   } else {
     document.getElementById('ocrStatus').innerHTML =
-      `✅ 处理 ${files.length} 张截图，奖品位共 <b>${grandExpected||'?'}</b>，识别 <b>${finalTotal}</b> 张卡<br><small style="font-size:10px;">${debugInfo}</small>`;
+      `✅ 处理 ${files.length} 张截图，奖品位共 <b>${grandExpected || '?'}</b>，识别 <b>${finalTotal}</b> 张卡<br><small style="font-size:10px;">${debugInfo}</small>`;
   }
   document.getElementById('ocrLoading').style.display = 'none';
   renderOCR();
@@ -890,19 +1209,24 @@ function renderOCR() {
   const container = document.getElementById('ocrNumbers');
 
   // 按稀有度动态分组（仅当前池，不含特典）
-  const order = poolRarities(currentPool).filter(r => r !== 'ex').map(r => ({
-    rarity: r,
-    icon: RARITY_INFO[r].icon,
-    label: RARITY_INFO[r].label,
-    ids: poolCards(currentPool).filter(c => c.rarity === r).map(c => c.id),
-  }));
+  const order = poolRarities(currentPool)
+    .filter(r => r !== 'ex')
+    .map(r => ({
+      rarity: r,
+      icon: RARITY_INFO[r].icon,
+      label: RARITY_INFO[r].label,
+      ids: poolCards(currentPool)
+        .filter(c => c.rarity === r)
+        .map(c => c.id),
+    }));
 
   let totalSelected = 0;
   let html = '';
 
   for (const group of order) {
     html += `<div style="font-size:11px;color:var(--brown-200);margin:6px 0 2px;">${group.icon} ${group.label}</div>`;
-    html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">';
+    html +=
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">';
     for (const id of group.ids) {
       const detected = ocrCounts[id] || 0;
       const selected = ocrSelected[id] || 0;
@@ -913,7 +1237,7 @@ function renderOCR() {
         html += `<div style="display:flex;align-items:center;gap:2px;background:var(--white);border-radius:12px;padding:3px 4px 3px 10px;border:2px solid var(--orange-300);">
           <span style="font-weight:700;font-size:13px;text-transform:uppercase;min-width:28px;">${id}</span>
           <button class="ocr-adj-btn" onclick="adjustOCR('${id}', -1)" style="width:28px;height:28px;border:none;border-radius:8px;background:var(--orange-50);font-size:18px;font-weight:700;color:var(--orange-600);cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
-          <span style="min-width:18px;text-align:center;font-weight:800;font-size:15px;color:${selected>0?'var(--orange-600)':'var(--brown-200)'};">${selected}</span>
+          <span style="min-width:18px;text-align:center;font-weight:800;font-size:15px;color:${selected > 0 ? 'var(--orange-600)' : 'var(--brown-200)'};">${selected}</span>
           <button class="ocr-adj-btn" onclick="adjustOCR('${id}', 1)" style="width:28px;height:28px;border:none;border-radius:8px;background:var(--orange-100);font-size:18px;font-weight:700;color:var(--orange-600);cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
         </div>`;
       } else {
@@ -975,7 +1299,10 @@ function confirmOCR() {
       for (let i = 0; i < cnt; i++) cards.push(id);
     }
   }
-  if (cards.length === 0) { showToast('⚠️ 请先调整每张卡的数量（点 + 增加）'); return; }
+  if (cards.length === 0) {
+    showToast('⚠️ 请先调整每张卡的数量（点 + 增加）');
+    return;
+  }
   addCards(cards, 'ocr');
   clearOCR();
   showToast(`✅ 已添加 ${cards.length} 张卡`);
@@ -985,8 +1312,11 @@ function clearOCR() {
   document.getElementById('uploadPreview').classList.remove('show');
   document.getElementById('previewImg').src = '';
   document.getElementById('ocrLoading').style.display = 'none';
-  document.getElementById('ocrStatus').textContent = '🤖 识别到的卡号（点击 ± 调整数量）：';
-  ocrCounts = {}; ocrSelected = {}; ocrExpectedTotal = 0;
+  document.getElementById('ocrStatus').textContent =
+    '🤖 识别到的卡号（点击 ± 调整数量）：';
+  ocrCounts = {};
+  ocrSelected = {};
+  ocrExpectedTotal = 0;
   document.getElementById('ocrNumbers').innerHTML = '';
   document.getElementById('ocrCount').textContent = '0';
   const hint = document.getElementById('ocrExpectedHint');
@@ -999,9 +1329,12 @@ function renderEntry() {
   // 渲染卡池页签
   const tabs = document.getElementById('entryPoolTabs');
   if (tabs) {
-    tabs.innerHTML = Object.entries(POOLS).map(([key, def]) =>
-      `<button class="pool-tab${key === currentPool ? ' active' : ''}" data-pool="${key}" onclick="switchPool('${key}')">${def.name}</button>`
-    ).join('');
+    tabs.innerHTML = Object.entries(POOLS)
+      .map(
+        ([key, def]) =>
+          `<button class="pool-tab${key === currentPool ? ' active' : ''}" data-pool="${key}" onclick="switchPool('${key}')">${def.name}</button>`,
+      )
+      .join('');
   }
 
   const grid = document.getElementById('entryGrid');
@@ -1026,7 +1359,13 @@ function renderEntry() {
       cards: cards.filter(card => card.type === t),
     }));
     const exCards = cards.filter(card => card.rarity === 'ex');
-    if (exCards.length) groups.push({ key: 'ex', title: '🎁 特典', cls: 'ex-title', cards: exCards });
+    if (exCards.length)
+      groups.push({
+        key: 'ex',
+        title: '🎁 特典',
+        cls: 'ex-title',
+        cards: exCards,
+      });
   }
 
   let html = '';
@@ -1049,8 +1388,8 @@ function entryCellHTML(card, c) {
     ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
     : `<span>${idText}</span>`;
   const cnt = c[card.id] || 0;
-  return `<div class="card-cell entry-cell ${card.rarity} ${cnt>0?'has':'zero'}" id="ecell-${card.id}">
-    <div class="placeholder">${imgHTML}</div>
+  return `<div class="card-cell entry-cell ${card.rarity} ${cnt > 0 ? 'has' : 'zero'}" id="ecell-${card.id}">
+    <div class="placeholder" data-cid="${idText}">${imgHTML}</div>
     <div class="cid">${idText}</div>
     <div class="cname">${card.name}</div>
     <div class="entry-ctrl">
@@ -1083,7 +1422,9 @@ function updateGroupCount(key) {
   if (groupMode === 'rarity') {
     grp = cards.filter(card => card.rarity === key);
   } else {
-    grp = cards.filter(card => (card.rarity === 'ex' && key === 'ex') || card.type === key);
+    grp = cards.filter(
+      card => (card.rarity === 'ex' && key === 'ex') || card.type === key,
+    );
   }
   const collected = grp.filter(card => (c[card.id] || 0) > 0).length;
   el.textContent = `${collected}/${grp.length}`;
@@ -1104,15 +1445,26 @@ function adjustEntry(id, delta) {
   const next = Math.max(0, cur + delta);
   cardCounts[currentPool][id] = next;
   if (delta > 0) {
-    history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type: 'manual' });
+    history.unshift({
+      time: new Date().toISOString(),
+      pool: currentPool,
+      cards: [id],
+      type: 'manual',
+    });
   } else if (delta < 0 && cur > 0) {
-    history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type: 'adjust' });
+    history.unshift({
+      time: new Date().toISOString(),
+      pool: currentPool,
+      cards: [id],
+      type: 'adjust',
+    });
   }
   saveData();
   // 局部更新：只改这一张卡 + 它所在组的计数，不重建整网格
   updateEntryCell(id);
   updateGroupCount(groupKeyOf(card));
-  updateStats(); renderPanels();
+  updateStats();
+  renderPanels();
   if (currentTab === 'history') renderHistory();
 }
 
@@ -1124,28 +1476,47 @@ function setEntryCount(id, val) {
   const cur = cardCounts[currentPool][id] || 0;
   let next = parseInt(val);
   if (isNaN(next) || next < 0) next = 0;
-  if (next === cur) { updateEntryCell(id); return; } // 无变化
+  if (next === cur) {
+    updateEntryCell(id);
+    return;
+  } // 无变化
   cardCounts[currentPool][id] = next;
   const type = next > cur ? 'manual' : 'adjust';
-  history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type });
+  history.unshift({
+    time: new Date().toISOString(),
+    pool: currentPool,
+    cards: [id],
+    type,
+  });
   saveData();
   updateEntryCell(id);
   updateGroupCount(groupKeyOf(card));
-  updateStats(); renderPanels();
+  updateStats();
+  renderPanels();
   if (currentTab === 'history') renderHistory();
 }
 
 function undoLast() {
   const last = history[0];
-  if (!last) { showToast('⚠️ 没有可撤销的记录'); return; }
+  if (!last) {
+    showToast('⚠️ 没有可撤销的记录');
+    return;
+  }
   history.shift();
   const isDecrement = last.type === 'adjust';
   const delta = isDecrement ? 1 : -1;
   for (const id of last.cards) {
     if (!cardCounts[last.pool]) cardCounts[last.pool] = {};
-    cardCounts[last.pool][id] = Math.max(0, (cardCounts[last.pool][id] || 0) + delta);
+    cardCounts[last.pool][id] = Math.max(
+      0,
+      (cardCounts[last.pool][id] || 0) + delta,
+    );
   }
-  saveData(); updateStats(); renderCollection(); renderHistory(); renderPanels();
+  saveData();
+  updateStats();
+  renderCollection();
+  renderHistory();
+  renderPanels();
   if (currentTab === 'entry' && currentSubTab === 'input') renderEntry();
   showToast('↩ 已撤销');
 }
@@ -1156,50 +1527,88 @@ function addCards(cards, type) {
   for (const id of cards) {
     cardCounts[currentPool][id] = (cardCounts[currentPool][id] || 0) + 1;
   }
-  history.unshift({ time: new Date().toISOString(), pool: currentPool, cards, type });
-  saveData(); updateStats(); renderCollection(); renderHistory(); renderPanels();
+  history.unshift({
+    time: new Date().toISOString(),
+    pool: currentPool,
+    cards,
+    type,
+  });
+  saveData();
+  updateStats();
+  renderCollection();
+  renderHistory();
+  renderPanels();
 }
 
 // ==================== HISTORY ====================
 function renderHistory() {
   const container = document.getElementById('historyList');
   if (history.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--brown-200);">🃏 还没有抽卡记录</div>';
+    container.innerHTML =
+      '<div style="text-align:center;padding:40px;color:var(--brown-200);">🃏 还没有抽卡记录</div>';
     return;
   }
-  container.innerHTML = history.map(h => {
-    const t = new Date(h.time);
-    const ts = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
-    const pn = h.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
-    const tl = { ocr:'📸截图', batch:'🔟十连', manual:'🂡单抽', adjust:'✏️调整' }[h.type] || h.type;
-    return `<div class="history-item">
+  container.innerHTML = history
+    .map(h => {
+      const t = new Date(h.time);
+      const ts = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+      const pn = h.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
+      const tl =
+        { ocr: '📸截图', batch: '🔟十连', manual: '🂡单抽', adjust: '✏️调整' }[
+          h.type
+        ] || h.type;
+      return `<div class="history-item">
       <div class="history-header"><span class="history-pool">${pn} · ${tl}</span><span class="history-time">${ts}</span></div>
-      <div class="history-cards">${h.cards.map(id => {
-        const card = cardByID(h.pool, id);
-        const cat = card ? card.rarity : catOf(id);
-        const name = card ? card.name : '?';
-        const idText = cat === 'ex' ? '★' : id.toUpperCase();
-        return `<span class="history-chip chip-${cat}">${idText} ${name}</span>`;
-      }).join('')}</div>
+      <div class="history-cards">${h.cards
+        .map(id => {
+          const card = cardByID(h.pool, id);
+          const cat = card ? card.rarity : catOf(id);
+          const name = card ? card.name : '?';
+          const idText = cat === 'ex' ? '★' : id.toUpperCase();
+          return `<span class="history-chip chip-${cat}">${idText} ${name}</span>`;
+        })
+        .join('')}</div>
     </div>`;
-  }).join('');
+    })
+    .join('');
 }
 function clearHistory() {
-  if (confirm('确定要清空所有记录吗？（卡牌数量不会丢失）')) { history = []; saveData(); renderHistory(); showToast('🗑 记录已清空'); }
+  if (confirm('确定要清空所有记录吗？（卡牌数量不会丢失）')) {
+    history = [];
+    saveData();
+    renderHistory();
+    showToast('🗑 记录已清空');
+  }
 }
 
 // ==================== EXPORT ====================
 function exportData() {
-  const json = JSON.stringify({ cardCounts, history, cardImages, version: 3 }, null, 2);
+  const json = JSON.stringify(
+    { cardCounts, history, cardImages, extraRewards, version: 3 },
+    null,
+    2,
+  );
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   if (navigator.share) {
-    const file = new File([json], '抽抽乐备份_' + new Date().toISOString().slice(0,10) + '.json', { type: 'application/json' });
+    const file = new File(
+      [json],
+      '抽抽乐备份_' + new Date().toISOString().slice(0, 10) + '.json',
+      { type: 'application/json' },
+    );
     navigator.share({ files: [file], title: '抽抽乐数据备份' }).catch(() => {
-      const a = document.createElement('a'); a.href = url; a.download = '抽抽乐备份.json'; a.click(); URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '抽抽乐备份.json';
+      a.click();
+      URL.revokeObjectURL(url);
     });
   } else {
-    const a = document.createElement('a'); a.href = url; a.download = '抽抽乐备份.json'; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '抽抽乐备份.json';
+    a.click();
+    URL.revokeObjectURL(url);
   }
   showToast('💾 数据已备份');
 }
@@ -1208,24 +1617,33 @@ function importData() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.json,application/json';
-  input.onchange = function(e) {
+  input.onchange = function (e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(ev) {
+    reader.onload = function (ev) {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!data.cardCounts) { showToast('⚠️ 无效的备份文件'); return; }
+        if (!data.cardCounts) {
+          showToast('⚠️ 无效的备份文件');
+          return;
+        }
         cardCounts = data.cardCounts || { xiari: {}, junuan: {} };
         history = data.history || [];
-        
+
         cardImages = data.cardImages || { xiari: {}, junuan: {} };
+        extraRewards = data.extraRewards || { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
         saveData();
         // 迁移导入的旧数据
         loadData();
-        updateStats(); renderCollection(); renderHistory(); renderPanels();
+        updateStats();
+        renderCollection();
+        renderHistory();
+        renderPanels();
         showToast('📥 数据已导入');
-      } catch(err) { showToast('⚠️ 文件格式错误'); }
+      } catch (err) {
+        showToast('⚠️ 文件格式错误');
+      }
     };
     reader.readAsText(file);
   };
@@ -1233,27 +1651,38 @@ function importData() {
 }
 
 function clearAllData() {
-  if (!confirm('⚠️ 确定要清空所有数据吗？（包括卡牌数量、记录、卡图）\n\n此操作不可恢复！建议先备份。')) return;
+  if (
+    !confirm(
+      '⚠️ 确定要清空所有数据吗？（包括卡牌数量、记录、卡图）\n\n此操作不可恢复！建议先备份。',
+    )
+  )
+    return;
   cardCounts = { xiari: {}, junuan: {} };
   history = [];
   cardImages = { xiari: {}, junuan: {} };
   saveData();
-  updateStats(); renderCollection(); renderHistory(); renderPanels();
+  updateStats();
+  renderCollection();
+  renderHistory();
+  renderPanels();
   showToast('🗑 所有数据已清空');
 }
 
 // ==================== TOAST ====================
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._tid); t._tid = setTimeout(() => t.classList.remove('show'), 2000);
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
 // ==================== IMAGE API ====================
 function setCardImage(pool, id, frontBase64, backBase64) {
   if (!cardImages[pool]) cardImages[pool] = {};
   cardImages[pool][id] = { front: frontBase64, back: backBase64 || null };
-  saveData(); renderCollection();
+  saveData();
+  renderCollection();
 }
 
 // ==================== STARTUP ====================
@@ -1262,7 +1691,87 @@ switchTab('collection');
 switchPool('xiari');
 renderPanels();
 // 点外部收起分组下拉
-document.addEventListener('click', (e) => {
+document.addEventListener('click', e => {
   const menu = document.getElementById('groupMenu');
   if (menu && !menu.contains(e.target)) closeGroupMenu();
 });
+
+// 关闭悬浮抽奖入口
+function closeFloatDraw(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  const el = document.getElementById('floatDraw');
+  if (el) el.style.display = 'none';
+}
+
+// 悬浮抽奖入口：可拖动 + 点击跳转
+(function initFloatDraw() {
+  const el = document.getElementById('floatDraw');
+  if (!el) return;
+  const STORAGE_KEY = 'ccg_float_pos';
+  // 恢复位置
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && saved.left != null) {
+      el.style.left = saved.left + 'px';
+      el.style.top = saved.top + 'px';
+      el.style.right = 'auto';
+    }
+  } catch (e) {}
+
+  let dragging = false, moved = false;
+  let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+  function getXY(e) {
+    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  }
+  function start(e) {
+    // 点关闭按钮不启动拖拽
+    if (e.target && e.target.id === 'floatDrawClose') return;
+    const p = getXY(e);
+    dragging = true; moved = false;
+    startX = p.x; startY = p.y;
+    const rect = el.getBoundingClientRect();
+    origLeft = rect.left; origTop = rect.top;
+    el.style.right = 'auto';
+    el.style.transition = 'none';
+  }
+  function move(e) {
+    if (!dragging) return;
+    const p = getXY(e);
+    const dx = p.x - startX, dy = p.y - startY;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      moved = true;
+      e.preventDefault();
+    }
+    if (!moved) return;
+    let left = origLeft + dx, top = origTop + dy;
+    // 约束在视口内
+    const maxX = window.innerWidth - el.offsetWidth;
+    const maxY = window.innerHeight - el.offsetHeight;
+    left = Math.max(4, Math.min(maxX - 4, left));
+    top = Math.max(4, Math.min(maxY - 4, top));
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+  }
+  function end() {
+    if (!dragging) return;
+    dragging = false;
+    el.style.transition = '';
+    if (moved) {
+      // 保存位置
+      const rect = el.getBoundingClientRect();
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: rect.left, top: rect.top })); } catch (e) {}
+    } else {
+      // 点击跳转
+      const href = el.dataset.href;
+      if (href) window.open(href, '_blank', 'noopener');
+    }
+  }
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchmove', move, { passive: false });
+  el.addEventListener('touchend', end);
+  el.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+})();

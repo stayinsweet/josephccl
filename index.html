@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="抽抽乐统计">
+<meta name="apple-mobile-web-app-title" content="joseph的抽抽乐">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23FF8C42' width='100' height='100' rx='20'/><text x='50' y='65' text-anchor='middle' fill='white' font-size='50' font-family='sans-serif'>🎴</text></svg>">
-<title>抽抽乐统计</title>
+<title>joseph的抽抽乐</title>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -16,7 +16,7 @@
 <div class="app">
   <!-- Header -->
   <header class="header">
-    <h1>🎴 抽抽乐统计</h1>
+    <h1>🍒奇妙浆果园</h1>
     <div style="display:flex;gap:4px;">
       <button class="btn btn-sm btn-white" onclick="exportData()">💾</button>
       <button class="btn btn-sm btn-white" onclick="importData()">📥</button>
@@ -129,15 +129,22 @@
   <!-- Bottom Tab Bar -->
   <nav class="tab-bar">
     <button class="tab-item active" data-tab="collection" onclick="switchTab('collection')">
-      <span class="tab-icon">📊</span>我的收藏
+     我的收藏
     </button>
     <button class="tab-item" data-tab="entry" onclick="switchTab('entry')">
-      <span class="tab-icon">✍️</span>录入
+    录入
     </button>
     <button class="tab-item" data-tab="history" onclick="switchTab('history')">
-      <span class="tab-icon">📝</span>记录
+     记录
     </button>
   </nav>
+</div>
+
+<!-- 悬浮抽奖入口（可拖动） -->
+<div class="float-draw" id="floatDraw" data-href="https://weidian.com/?userid=1372238443&p=iphone&wfr=BuyercopyURL&share_relation=e6570deea04fcace_1654664813_1">
+  <button class="float-draw-close" id="floatDrawClose" onclick="closeFloatDraw(event)">✕</button>
+  <div class="float-draw-circle"></div>
+  <span class="float-draw-text">去抽一发</span>
 </div>
 
 <!-- Card Detail Modal -->
@@ -164,6 +171,17 @@
     <div class="bonus-modal-title" id="bonusModalTitle">满赠详情</div>
     <div id="bonusModalBody"></div>
     <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeBonusModal()">关闭</button>
+  </div>
+</div>
+
+<!-- 额外奖励确认 Modal（限时礼 / 宣传礼） -->
+<div class="modal-overlay" id="extraModal" style="display:none;" onclick="if(event.target===this)closeExtraModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeExtraModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="extraModalTitle"></div>
+    <div id="extraModalBody"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmExtraModal()">✅ 确认</button>
   </div>
 </div>
 
