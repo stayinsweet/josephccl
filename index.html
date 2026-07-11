@@ -1,14 +1,23 @@
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Vite + React + TS</title>
-	</head>
-
-	<body>
-		<div id="root"></div>
-		<script type="module" src="/src/react-app/main.tsx"></script>
-	</body>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare Pages演示站点</title>
+    <style>
+        *{margin: 0;padding: 0;box-sizing: border-box;font-family: system-ui, sans-serif;}
+        body{min-height: 100vh;display: grid;place-items: center;background: #f0f4f8;padding: 20px;}
+        .card{background:white;padding: 40px;border-radius: 16px;box-shadow: 0 4px 18px rgba(0,0,0,0.08);max-width: 520px;width: 100%;text-align: center;}
+        h1{color:#1f2937;margin-bottom: 14px;font-size: 24px;}
+        .tip{color:#4b5563;line-height: 1.7;margin-bottom: 22px;}
+        .domain-info{background:#eff6ff;padding:14px;border-radius:10px;color:#1d4ed8;font-weight:500}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>部署成功 ✅ Pages站点正常运行</h1>
+        <p class="tip">这份静态页面托管在 Cloudflare Pages，会自动分配 pages.dev 域名，自带CDN加速、HTTPS加密</p>
+        <div class="domain-info">你的访问域名格式：项目名.账号ID.pages.dev</div>
+    </div>
+</body>
 </html>
