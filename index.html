@@ -63,58 +63,55 @@
       <div class="panel" id="rewardPool"></div>
     </div>
 
-    <!-- Tab 2: 截图识别 -->
-    <div class="tab-page" id="tab-ocr">
-      <div style="text-align:center;font-size:13px;color:var(--brown-200);margin-bottom:12px;">📸 可一次选多张截图，依次识别后结果累加</div>
-      <input type="file" id="screenshotInput" accept="image/*" multiple onchange="handleScreenshots(event)">
-      <div class="upload-zone" onclick="document.getElementById('screenshotInput').click()" id="uploadZone">
-        <div class="icon">📷</div><div class="text">点击上传截图（支持多选）</div><div class="hint">拍照或从相册批量选择 · 结果自动累加</div>
+    <!-- Tab 2: 录入（截图识别 + 手动输入 子页签） -->
+    <div class="tab-page" id="tab-entry">
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-sub="input" onclick="switchSubTab('input')">🔢 手动输入</button>
+        <button class="sub-tab" data-sub="ocr" onclick="switchSubTab('ocr')">📷 截图识别</button>
       </div>
-      <div class="upload-preview" id="uploadPreview">
-        <img id="previewImg" src="" alt="预览">
-        <div class="ocr-result">
-          <div class="ocr-title" id="ocrStatus">🤖 识别到的卡号（点击可剔除误识别）：</div>
-          <div class="ocr-loading" id="ocrLoading">
-            <div style="font-size:28px;animation:pulse 1s infinite;">🔍</div>
-            <div style="font-size:13px;color:var(--brown-200);margin-top:6px;">正在识别截图中的卡号...</div>
+
+      <div class="sub-page active" id="sub-input">
+        <div class="entry-section">
+          <div class="pool-bar entry-pool-bar">
+            <div class="pool-tabs" id="entryPoolTabs"></div>
           </div>
-          <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
-            <button class="btn btn-sm btn-outline" onclick="selectAllOCR()">✅ 全选</button>
-            <button class="btn btn-sm btn-outline" onclick="deselectAllOCR()">✕ 清空</button>
-            <span id="ocrExpectedHint" style="font-size:11px;color:var(--brown-200);margin-left:auto;"></span>
+          <div id="entryGrid"></div>
+        </div>
+        <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="undoLast()">↩ 撤销上一次</button>
+      </div>
+
+      <div class="sub-page" id="sub-ocr">
+        <div style="text-align:center;font-size:13px;color:var(--brown-200);margin-bottom:12px;">📸 可一次选多张截图，依次识别后结果累加</div>
+        <input type="file" id="screenshotInput" accept="image/*" multiple onchange="handleScreenshots(event)">
+        <div class="upload-zone" onclick="document.getElementById('screenshotInput').click()" id="uploadZone">
+          <div class="icon">📷</div><div class="text">点击上传截图（支持多选）</div><div class="hint">拍照或从相册批量选择 · 结果自动累加</div>
+        </div>
+        <div class="upload-preview" id="uploadPreview">
+          <img id="previewImg" src="" alt="预览">
+          <div class="ocr-result">
+            <div class="ocr-title" id="ocrStatus">🤖 识别到的卡号（点击可剔除误识别）：</div>
+            <div class="ocr-loading" id="ocrLoading">
+              <div style="font-size:28px;animation:pulse 1s infinite;">🔍</div>
+              <div style="font-size:13px;color:var(--brown-200);margin-top:6px;">正在识别截图中的卡号...</div>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+              <button class="btn btn-sm btn-outline" onclick="selectAllOCR()">✅ 全选</button>
+              <button class="btn btn-sm btn-outline" onclick="deselectAllOCR()">✕ 清空</button>
+              <span id="ocrExpectedHint" style="font-size:11px;color:var(--brown-200);margin-left:auto;"></span>
+            </div>
+            <div class="ocr-nums" id="ocrNumbers"></div>
           </div>
-          <div class="ocr-nums" id="ocrNumbers"></div>
+          <div class="btn-row">
+            <button class="btn btn-outline" onclick="clearOCR()">✕ 取消</button>
+            <button class="btn btn-primary" onclick="confirmOCR()">✅ 确认添加 (<span id="ocrCount">0</span>张)</button>
+          </div>
         </div>
-        <div class="btn-row">
-          <button class="btn btn-outline" onclick="clearOCR()">✕ 取消</button>
-          <button class="btn btn-primary" onclick="confirmOCR()">✅ 确认添加 (<span id="ocrCount">0</span>张)</button>
-        </div>
-      </div>
-      <div style="margin-top:14px;padding:14px;background:var(--orange-50);border-radius:12px;font-size:12px;color:var(--brown-200);line-height:1.8;">
-        <div style="font-weight:600;color:var(--brown-800);margin-bottom:4px;">💡 截图技巧</div>
-        • 可一次选择多张截图，依次识别后结果累加<br>• 卡号格式：PR1、R3、SR2 等<br>• 识别结果每张卡有 ± 按钮调整数量<br>• 右侧提示「与奖品位一致」即可放心确认
-      </div>
-    </div>
-
-    <!-- Tab 3: 手动输入 -->
-    <div class="tab-page" id="tab-input">
-      <div class="input-display">
-        <div class="input-current" id="inputDisplay">
-          <span style="color:var(--brown-200);font-size:18px;">选择卡牌类别</span>
+        <div style="margin-top:14px;padding:14px;background:var(--orange-50);border-radius:12px;font-size:12px;color:var(--brown-200);line-height:1.8;">
+          <div style="font-weight:600;color:var(--brown-800);margin-bottom:4px;">💡 截图技巧</div>
+          • 可一次选择多张截图，依次识别后结果累加<br>• 卡号格式：PR1、R3、SR2 等<br>• 识别结果每张卡有 ± 按钮调整数量<br>• 右侧提示「与奖品位一致」即可放心确认
         </div>
       </div>
 
-      <div class="input-mode-toggle">
-        <button class="input-mode-btn active" onclick="setInputMode('single')" id="modeSingle">🂡 单抽</button>
-        <button class="input-mode-btn" onclick="setInputMode('batch')" id="modeBatch">🔟 十连</button>
-      </div>
-      <div class="batch-info" id="batchInfo">本轮已录 <span class="cnt" id="batchCnt">0</span> / 10 张</div>
-
-      <div class="category-select" id="categorySelect" style="flex-wrap:wrap;"></div>
-      <div class="specials-row" id="specialsRow"></div>
-
-      <div class="numpad" id="numpadContainer"></div>
-      <button class="btn btn-outline" style="width:100%;margin-top:4px;" onclick="undoLast()">↩ 撤销上一次</button>
     </div>
 
     <!-- Tab 4: 记录 -->
@@ -134,11 +131,8 @@
     <button class="tab-item active" data-tab="collection" onclick="switchTab('collection')">
       <span class="tab-icon">📊</span>我的收藏
     </button>
-    <button class="tab-item" data-tab="ocr" onclick="switchTab('ocr')">
-      <span class="tab-icon">📷</span>截图识别
-    </button>
-    <button class="tab-item" data-tab="input" onclick="switchTab('input')">
-      <span class="tab-icon">🔢</span>手动输入
+    <button class="tab-item" data-tab="entry" onclick="switchTab('entry')">
+      <span class="tab-icon">✍️</span>录入
     </button>
     <button class="tab-item" data-tab="history" onclick="switchTab('history')">
       <span class="tab-icon">📝</span>记录
@@ -158,13 +152,8 @@
       <div class="modal-cid" id="modalCid">pr1</div>
       <div class="modal-name" id="modalName">卡名</div>
       <div class="modal-rarity" id="modalRarity">PR</div>
+      <div class="modal-count-line">持有 <span id="modalCount">0</span> 张</div>
     </div>
-    <div class="modal-counter">
-      <button onclick="adjustCard(-1)">−</button>
-      <span class="cnt" id="modalCount">0</span>
-      <button onclick="adjustCard(1)">+</button>
-    </div>
-    <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="adjustCard(1)">➕ 加一抽</button>
     <button class="btn btn-outline" style="width:100%;" onclick="closeModal()">关闭</button>
   </div>
 </div>

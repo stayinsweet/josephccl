@@ -129,10 +129,6 @@ const GLOBAL_TOTAL_DRAWS = 0;
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
 let currentTab = 'collection';
-let inputMode = 'single';
-let batchCards = [];
-let selectedCat = 'r';
-let currentNum = '';
 let groupMode = 'type'; // 'rarity' | 'type'
 let ocrCounts = {};   // OCR检测到的每张卡的数量 { pr2: 2, r3: 1 }
 let ocrSelected = {}; // 用户调整后的数量 { pr2: 2, r3: 1 }，0 表示剔除
@@ -225,13 +221,8 @@ function globalUnlockedCount() {
 function switchPool(pool) {
   currentPool = pool;
   document.querySelectorAll('.pool-tab').forEach(b => b.classList.toggle('active', b.dataset.pool === pool));
-  // 若当前选中稀有度在新池不存在，回退到该池第一个稀有度
-  if (!poolRarities(pool).includes(selectedCat)) {
-    selectedCat = poolRarities(pool)[0] || 'r';
-    currentNum = '';
-  }
   renderCollection(); updateStats(); renderPanels();
-  renderCategoryButtons(); renderNumpad(); updateInputDisplay();
+  if (currentTab === 'entry') renderEntry();
 }
 function switchTab(tab) {
   currentTab = tab;
@@ -244,7 +235,17 @@ function switchTab(tab) {
   if (gm) gm.style.display = (tab === 'collection') ? '' : 'none';
   if (tab === 'collection') { renderCollection(); updateStats(); renderPanels(); }
   if (tab === 'history') renderHistory();
-  if (tab === 'input') renderNumpad();
+  if (tab === 'entry' && currentSubTab === 'input') renderEntry();
+}
+
+// 录入页子页签切换
+let currentSubTab = 'input';
+function switchSubTab(sub) {
+  currentSubTab = sub;
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.toggle('active', t.dataset.sub === sub));
+  document.querySelectorAll('.sub-page').forEach(p => p.classList.remove('active'));
+  const p = document.getElementById('sub-' + sub); if (p) p.classList.add('active');
+  if (sub === 'input') renderEntry();
 }
 
 // ==================== STATS ====================
@@ -591,20 +592,6 @@ function openModal(id) {
 function closeModal() {
   document.getElementById('cardModal').style.display = 'none';
   modalCard = null;
-  renderCollection(); updateStats();
-}
-function adjustCard(delta) {
-  if (!modalCard) return;
-  if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
-  const k = modalCard;
-  const cur = cardCounts[currentPool][k] || 0;
-  cardCounts[currentPool][k] = Math.max(0, cur + delta);
-  if (delta > 0) {
-    history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [k], type: 'adjust' });
-  }
-  saveData();
-  document.getElementById('modalCount').textContent = cardCounts[currentPool][k];
-  updateStats(); renderCollection(); renderPanels();
 }
 
 // ==================== SCREENSHOT OCR（中文识别版）====================
@@ -989,149 +976,117 @@ function clearOCR() {
   if (hint) hint.innerHTML = '';
 }
 
-// ==================== MANUAL INPUT ====================
-function renderCategoryButtons() {
-  const container = document.getElementById('categorySelect');
-  if (!container) return;
-  const rarities = poolRarities(currentPool);
-  let html = '';
-  for (const r of rarities) {
-    if (r === 'ex') continue; // 特典走单独行
-    const info = RARITY_INFO[r];
-    const active = selectedCat === r ? 'active' : '';
-    html += `<button class="cat-btn ${r}-btn ${active}" data-cat="${r}" onclick="selectCategory('${r}')">
-      <span class="cat-icon">${info.icon}</span><span class="cat-label">${info.label}</span>
-    </button>`;
+// ==================== MANUAL INPUT (录入网格) ====================
+// 录入页：双卡池页签 + 分组卡片网格，每卡可加减数量
+function renderEntry() {
+  // 渲染卡池页签
+  const tabs = document.getElementById('entryPoolTabs');
+  if (tabs) {
+    tabs.innerHTML = Object.entries(POOLS).map(([key, def]) =>
+      `<button class="pool-tab${key === currentPool ? ' active' : ''}" data-pool="${key}" onclick="switchPool('${key}')">${def.name}</button>`
+    ).join('');
   }
-  container.innerHTML = html;
 
-  // 特殊卡牌一行
-  const specialsRow = document.getElementById('specialsRow');
-  if (specialsRow) {
-    const specials = POOLS[currentPool].specials;
-    html = `<div style="font-size:11px;color:var(--brown-200);margin:2px 0 4px;">🎁 特典（点一次 +1）</div><div style="display:flex;flex-wrap:wrap;gap:6px;">`;
-    specials.forEach((name, i) => {
-      html += `<button class="special-chip" onclick="addSpecial(${i})">${name}</button>`;
-    });
-    html += '</div>';
-    specialsRow.innerHTML = html;
-  }
-}
+  const grid = document.getElementById('entryGrid');
+  if (!grid) return;
+  const c = cardCounts[currentPool] || {};
+  const cards = poolCards(currentPool);
 
-function addSpecial(index) {
-  const id = 'ex' + (index + 1);
-  if (!cardByID(currentPool, id)) return;
-  if (inputMode === 'single') {
-    addCards([id], 'manual');
-    showToast(`✅ 已添加 ${POOLS[currentPool].specials[index]}`);
+  // 分组（与收藏页一致：按稀有度 / 按卡牌类型）
+  let groups;
+  if (groupMode === 'rarity') {
+    groups = poolRarities(currentPool).map(r => ({
+      title: `${RARITY_INFO[r].icon} ${RARITY_INFO[r].label}`,
+      cls: r + '-title',
+      cards: cards.filter(card => card.rarity === r),
+    }));
   } else {
-    batchCards.push(id);
-    document.getElementById('batchCnt').textContent = batchCards.length;
-    showToast(`✅ 已录 ${POOLS[currentPool].specials[index]}（${batchCards.length}/10）`);
-    if (batchCards.length >= 10) {
-      addCards([...batchCards], 'batch');
-      showToast('✅ 十连已记录！');
-      batchCards = [];
-      document.getElementById('batchCnt').textContent = '0';
-    }
+    groups = poolTypes(currentPool).map(t => ({
+      title: t,
+      cls: 'type-title',
+      cards: cards.filter(card => card.type === t),
+    }));
+    const exCards = cards.filter(card => card.rarity === 'ex');
+    if (exCards.length) groups.push({ title: '🎁 特典', cls: 'ex-title', cards: exCards });
   }
-}
-
-function selectCategory(cat) {
-  selectedCat = cat;
-  currentNum = '';
-  document.querySelectorAll('.cat-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.cat === cat);
-  });
-  renderNumpad();
-  updateInputDisplay();
-}
-
-function renderNumpad() {
-  const container = document.getElementById('numpadContainer');
-  if (!container) return;
-  const maxNum = maxNumForRarity(currentPool, selectedCat);
-  const nums = [];
-  for (let i = 1; i <= maxNum; i++) nums.push(i);
 
   let html = '';
-  for (const n of nums) {
-    html += `<button class="numpad-btn" onclick="pressNum('${n}')">${n}</button>`;
+  for (const g of groups) {
+    const total = g.cards.length;
+    const collected = g.cards.filter(card => (c[card.id] || 0) > 0).length;
+    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}<span class="group-count">${collected}/${total}</span></div><div class="card-grid entry-grid">`;
+    html += g.cards.map(card => {
+      const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
+      const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
+      const imgHTML = imgs && imgs.front
+        ? `<img src="${imgs.front}" alt="${card.id}">`
+        : `<span>${idText}</span>`;
+      const cnt = c[card.id] || 0;
+      return `<div class="card-cell entry-cell ${card.rarity} ${cnt>0?'has':'zero'}">
+        <div class="placeholder">${imgHTML}</div>
+        <div class="cid">${idText}</div>
+        <div class="cname">${card.name}</div>
+        <div class="entry-ctrl">
+          <button class="entry-btn" onclick="adjustEntry('${card.id}', -1)">−</button>
+          <input class="entry-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${cnt}" data-id="${card.id}" onfocus="this.select()" onchange="setEntryCount('${card.id}', this.value)">
+          <button class="entry-btn" onclick="adjustEntry('${card.id}', 1)">+</button>
+        </div>
+      </div>`;
+    }).join('');
+    html += '</div></div>';
   }
-  // Fill remaining grid slots if any
-  while (nums.length < 7) { html += '<div></div>'; nums.push(null); }
-  html += `<button class="numpad-btn del" onclick="pressDel()">⌫</button>`;
-  html += `<button class="numpad-btn add" onclick="pressAdd()">＋添加</button>`;
-
-  container.innerHTML = html;
+  grid.innerHTML = html;
 }
 
-function pressNum(n) {
-  currentNum = n;
-  updateInputDisplay();
-}
-function pressDel() {
-  currentNum = '';
-  updateInputDisplay();
-}
-function updateInputDisplay() {
-  const display = document.getElementById('inputDisplay');
-  const validIDs = new Set(poolIDs(currentPool));
-  if (!currentNum) {
-    display.innerHTML = '<span style="color:var(--brown-200);font-size:18px;">选类别 → 点数字 → 添加</span>';
-  } else {
-    const id = selectedCat + currentNum;
-    const card = cardByID(currentPool, id);
-    const info = RARITY_INFO[selectedCat];
-    const name = (card && card.name) || '?';
-    display.innerHTML = `<span>${id.toUpperCase()}</span><div class="preview">${info.icon} ${info.label} · ${name}</div>`;
+// 录入页卡片加减（直接修改数量，记录到 history）
+function adjustEntry(id, delta) {
+  const card = cardByID(currentPool, id);
+  if (!card) return;
+  if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
+  const cur = cardCounts[currentPool][id] || 0;
+  const next = Math.max(0, cur + delta);
+  cardCounts[currentPool][id] = next;
+  if (delta > 0) {
+    history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type: 'manual' });
+  } else if (delta < 0 && cur > 0) {
+    history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type: 'adjust' });
   }
-  document.getElementById('batchCnt').textContent = batchCards.length;
+  saveData();
+  renderEntry();
+  updateStats(); renderPanels();
+  if (currentTab === 'history') renderHistory();
 }
 
-function pressAdd() {
-  if (!currentNum) { showToast('⚠️ 请先选择数字'); return; }
-  const id = selectedCat + currentNum;
-  if (!cardByID(currentPool, id)) { showToast('⚠️ 无效卡号'); return; }
-
-  if (inputMode === 'single') {
-    addCards([id], 'manual');
-    showToast(`✅ 已添加 ${id.toUpperCase()}`);
-  } else {
-    batchCards.push(id);
-    document.getElementById('batchCnt').textContent = batchCards.length;
-    showToast(`✅ 已录 ${id.toUpperCase()}（${batchCards.length}/10）`);
-    if (batchCards.length >= 10) {
-      addCards([...batchCards], 'batch');
-      showToast('✅ 十连已记录！');
-      batchCards = [];
-      document.getElementById('batchCnt').textContent = '0';
-    }
-  }
-  currentNum = '';
-  updateInputDisplay();
-}
-
-function setInputMode(mode) {
-  inputMode = mode;
-  document.getElementById('modeSingle').classList.toggle('active', mode === 'single');
-  document.getElementById('modeBatch').classList.toggle('active', mode === 'batch');
-  document.getElementById('batchInfo').style.display = mode === 'batch' ? 'block' : 'none';
-  batchCards = [];
-  document.getElementById('batchCnt').textContent = '0';
+// 录入页手动输入数量（直接设为指定值，差异记为单抽/调整）
+function setEntryCount(id, val) {
+  const card = cardByID(currentPool, id);
+  if (!card) return;
+  if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
+  const cur = cardCounts[currentPool][id] || 0;
+  let next = parseInt(val);
+  if (isNaN(next) || next < 0) next = 0;
+  if (next === cur) { renderEntry(); return; } // 无变化
+  cardCounts[currentPool][id] = next;
+  const type = next > cur ? 'manual' : 'adjust';
+  history.unshift({ time: new Date().toISOString(), pool: currentPool, cards: [id], type });
+  saveData();
+  renderEntry();
+  updateStats(); renderPanels();
+  if (currentTab === 'history') renderHistory();
 }
 
 function undoLast() {
   const last = history[0];
   if (!last) { showToast('⚠️ 没有可撤销的记录'); return; }
-  if (last.type === 'adjust') { showToast('⚠️ 请在卡片详情中调整'); return; }
   history.shift();
+  const isDecrement = last.type === 'adjust';
+  const delta = isDecrement ? 1 : -1;
   for (const id of last.cards) {
-    if (cardCounts[last.pool] && cardCounts[last.pool][id]) {
-      cardCounts[last.pool][id] = Math.max(0, (cardCounts[last.pool][id] || 0) - 1);
-    }
+    if (!cardCounts[last.pool]) cardCounts[last.pool] = {};
+    cardCounts[last.pool][id] = Math.max(0, (cardCounts[last.pool][id] || 0) + delta);
   }
   saveData(); updateStats(); renderCollection(); renderHistory(); renderPanels();
+  if (currentTab === 'entry' && currentSubTab === 'input') renderEntry();
   showToast('↩ 已撤销');
 }
 
@@ -1245,7 +1200,6 @@ function setCardImage(pool, id, frontBase64, backBase64) {
 loadData();
 switchTab('collection');
 switchPool('xiari');
-renderNumpad();
 renderPanels();
 // 点外部收起分组下拉
 document.addEventListener('click', (e) => {
