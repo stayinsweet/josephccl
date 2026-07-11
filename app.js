@@ -143,7 +143,7 @@ function cardInfo(id) { return cardByID(currentPool, id); }
 // ==================== POOL & TAB ====================
 function switchPool(pool) {
   currentPool = pool;
-  document.querySelectorAll('.pool-btn').forEach(b => b.classList.toggle('active', b.dataset.pool === pool));
+  document.querySelectorAll('.pool-tab').forEach(b => b.classList.toggle('active', b.dataset.pool === pool));
   // 若当前选中稀有度在新池不存在，回退到该池第一个稀有度
   if (!poolRarities(pool).includes(selectedCat)) {
     selectedCat = poolRarities(pool)[0] || 'r';
