@@ -24,10 +24,21 @@
     </div>
   </header>
 
-  <!-- Pool Selector -->
-  <div class="pool-selector">
-    <button class="pool-btn active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
-    <button class="pool-btn" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
+  <!-- Pool Bar: 池子页签(左) + 分组切换图标(右) -->
+  <div class="pool-bar">
+    <div class="pool-tabs">
+      <button class="pool-tab active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
+      <button class="pool-tab" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
+    </div>
+    <div class="group-menu" id="groupMenu" style="display:none;">
+      <button class="group-icon-btn" id="groupIconBtn" onclick="toggleGroupMenu(event)" title="切换分组方式">
+        <span id="groupIconLabel">🏷️</span>
+      </button>
+      <div class="group-dropdown" id="groupDropdown">
+        <div class="group-option active" data-group="type" onclick="setGroupMode('type')">🏷️ 按卡牌类型</div>
+        <div class="group-option" data-group="rarity" onclick="setGroupMode('rarity')">📊 按稀有度</div>
+      </div>
+    </div>
   </div>
 
   <!-- Main Content -->
@@ -35,13 +46,7 @@
 
     <!-- Tab 1: 我的收藏 -->
     <div class="tab-page active" id="tab-collection">
-      <div class="stats-row">
-        <div class="stat-card"><div class="num orange" id="statTotal">0</div><div class="lbl">总抽数</div></div>
-        <div class="stat-card"><div class="num pr-num" id="statPR">0</div><div class="lbl">拍立得</div></div>
-        <div class="stat-card"><div class="num r-num" id="statR">0</div><div class="lbl">音乐卡</div></div>
-        <div class="stat-card"><div class="num sr-num" id="statSR">0</div><div class="lbl">米兰卡</div></div>
-        <div class="stat-card"><div class="num ssr-num" id="statSSR">0</div><div class="lbl">双面卡</div></div>
-      </div>
+      <div class="stats-row" id="statsRow"></div>
 
       <div class="bonus-section">
         <div class="bonus-header">
@@ -104,20 +109,8 @@
       </div>
       <div class="batch-info" id="batchInfo">本轮已录 <span class="cnt" id="batchCnt">0</span> / 10 张</div>
 
-      <div class="category-select" style="flex-wrap:wrap;">
-        <button class="cat-btn pr-btn active" data-cat="pr" onclick="selectCategory('pr')">
-          <span class="cat-icon">📸</span><span class="cat-label">拍立得 PR</span>
-        </button>
-        <button class="cat-btn r-btn" data-cat="r" onclick="selectCategory('r')">
-          <span class="cat-icon">🎵</span><span class="cat-label">音乐卡 R</span>
-        </button>
-        <button class="cat-btn sr-btn" data-cat="sr" onclick="selectCategory('sr')">
-          <span class="cat-icon">👗</span><span class="cat-label">米兰卡 SR</span>
-        </button>
-        <button class="cat-btn ssr-btn" data-cat="ssr" onclick="selectCategory('ssr')">
-          <span class="cat-icon">💎</span><span class="cat-label">双面卡 SSR</span>
-        </button>
-      </div>
+      <div class="category-select" id="categorySelect" style="flex-wrap:wrap;"></div>
+      <div class="specials-row" id="specialsRow"></div>
 
       <div class="numpad" id="numpadContainer"></div>
       <button class="btn btn-outline" style="width:100%;margin-top:4px;" onclick="undoLast()">↩ 撤销上一次</button>

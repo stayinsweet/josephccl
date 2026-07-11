@@ -1,39 +1,92 @@
 // ==================== CARD DATA ====================
-const CATEGORIES = {
-  pr:  { name: '拍立得', icon: '📸', max: 4,  rarity: 'pr',  color: 'pr' },
-  r:   { name: '音乐卡', icon: '🎵', max: 11, rarity: 'r',   color: 'r' },
-  sr:  { name: '米兰卡', icon: '👗', max: 4,  rarity: 'sr',  color: 'sr' },
-  ssr: { name: '双面卡', icon: '💎', max: 2,  rarity: 'ssr', color: 'ssr' },
-};
-
-// 所有有效卡片的 ID 列表
-function allCardIDs() {
-  const ids = [];
-  for (const [cat, def] of Object.entries(CATEGORIES)) {
-    for (let i = 1; i <= def.max; i++) {
-      ids.push(cat + i);
-    }
-  }
-  return ids;
-}
-
-const ALL_CARD_IDS = allCardIDs(); // ["pr1","pr2","pr3","pr4","r1","r2","r3","r4","r5","sr1","sr2","sr3","sr4"]
-
-// 卡牌名称数据（按池子区分，尚未填入的用 ?）
-const CARD_NAMES = {
+// 卡池配置：ranges = [卡牌类型, 稀有度, 起始编号, 结束编号]，同稀有度跨类型连续编号
+const POOLS = {
   xiari: {
-    pr1:'?', pr2:'?', pr3:'?', pr4:'?',
-    r1:'?', r2:'?', r3:'?', r4:'?', r5:'?', r6:'?', r7:'?', r8:'?', r9:'?', r10:'?', r11:'?',
-    sr1:'?', sr2:'?', sr3:'?', sr4:'?',
-    ssr1:'?', ssr2:'?',
+    name: '🏖️ 夏日池',
+    ranges: [
+      ['日常卡', 'r', 1, 8],
+      ['日常卡', 'pr', 1, 3],
+      ['音乐卡', 'sr', 1, 10],
+      ['音乐卡', 'pr', 4, 8],
+      ['涂鸦卡', 'ssr', 1, 5],
+      ['路透卡', 'pr', 9, 18],
+      ['拍立得', 'ur', 1, 4],
+      ['镂空卡', 'hr', 1, 3],
+      ['衣料卡', 'hr', 4, 4],
+    ],
+    specials: ['签名照', '晞咘咘', '泡泡玛特盲盒'],
   },
   junuan: {
-    pr1:'?', pr2:'?', pr3:'?', pr4:'?',
-    r1:'?', r2:'?', r3:'?', r4:'?', r5:'?', r6:'?', r7:'?', r8:'?', r9:'?', r10:'?', r11:'?',
-    sr1:'?', sr2:'?', sr3:'?', sr4:'?',
-    ssr1:'?', ssr2:'?',
-  }
+    name: '🍊 橘暖池',
+    ranges: [
+      ['角色卡', 'r', 1, 14],
+      ['角色卡', 'pr', 1, 9],
+      ['拼图卡', 'sr', 1, 9],
+      ['月历卡', 'ssr', 1, 12],
+      ['工艺卡', 'sp', 1, 3],
+      ['未公开角色卡', 'ur', 1, 2],
+    ],
+    specials: ['未公开亲签拍立得', '阿玛尼手链', '阿玛尼墨镜', '安热沙防晒'],
+  },
 };
+
+const RARITY_INFO = {
+  r:   { label: 'R',     icon: '🎵' },
+  pr:  { label: 'PR',    icon: '📸' },
+  sr:  { label: 'SR',    icon: '👗' },
+  ssr: { label: 'SSR',   icon: '💎' },
+  ur:  { label: 'UR',    icon: '🏆' },
+  hr:  { label: 'HR',    icon: '🎴' },
+  sp:  { label: 'SP',    icon: '✨' },
+  ex:  { label: '特典',   icon: '🎁' },
+};
+
+// 稳定渲染顺序
+const RARITY_ORDER = ['r', 'pr', 'sr', 'ssr', 'sp', 'ur', 'hr', 'ex'];
+
+// 缓存：每池的卡牌数组 / id 列表 / 稀有度顺序 / 卡牌类型顺序
+const _poolCardsCache = {};
+function poolCards(pool) {
+  if (_poolCardsCache[pool]) return _poolCardsCache[pool];
+  const def = POOLS[pool];
+  const cards = [];
+  for (const [type, rarity, start, end] of def.ranges) {
+    for (let n = start; n <= end; n++) {
+      cards.push({ id: rarity + n, type, rarity, num: n, name: type });
+    }
+  }
+  def.specials.forEach((name, i) => {
+    cards.push({ id: 'ex' + (i + 1), type: '特典', rarity: 'ex', num: i + 1, name });
+  });
+  _poolCardsCache[pool] = cards;
+  return cards;
+}
+function poolIDs(pool) {
+  return poolCards(pool).map(c => c.id);
+}
+// 该池出现的稀有度（按 RARITY_ORDER 排序）
+function poolRarities(pool) {
+  const set = new Set(poolCards(pool).map(c => c.rarity));
+  return RARITY_ORDER.filter(r => set.has(r));
+}
+// 该池出现的卡牌类型（按 ranges 首次出现顺序，特典排末尾）
+function poolTypes(pool) {
+  const types = [];
+  for (const [type] of POOLS[pool].ranges) {
+    if (!types.includes(type)) types.push(type);
+  }
+  return types;
+}
+function cardByID(pool, id) {
+  return poolCards(pool).find(c => c.id === id);
+}
+function maxNumForRarity(pool, rarity) {
+  let max = 0;
+  for (const c of poolCards(pool)) {
+    if (c.rarity === rarity && c.num > max) max = c.num;
+  }
+  return max;
+}
 
 // ==================== STATE ====================
 let cardCounts = { xiari: {}, junuan: {} };
@@ -46,8 +99,9 @@ let currentPool = 'xiari';
 let currentTab = 'collection';
 let inputMode = 'single';
 let batchCards = [];
-let selectedCat = 'pr';
+let selectedCat = 'r';
 let currentNum = '';
+let groupMode = 'type'; // 'rarity' | 'type'
 let ocrCounts = {};   // OCR检测到的每张卡的数量 { pr2: 2, r3: 1 }
 let ocrSelected = {}; // 用户调整后的数量 { pr2: 2, r3: 1 }，0 表示剔除
 let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
@@ -62,21 +116,41 @@ function loadData() {
     milestones = d.milestones || milestones;
     cardImages = d.cardImages || { xiari: {}, junuan: {} };
   } catch(e) {}
+  // 迁移：删除新卡池中不存在的旧 id（如旧 xiari 的 r9/r10/r11）
+  for (const pool of ['xiari', 'junuan']) {
+    const valid = new Set(poolIDs(pool));
+    if (cardCounts[pool]) {
+      for (const id of Object.keys(cardCounts[pool])) {
+        if (!valid.has(id)) delete cardCounts[pool][id];
+      }
+    }
+    if (cardImages[pool]) {
+      for (const id of Object.keys(cardImages[pool])) {
+        if (!valid.has(id)) delete cardImages[pool][id];
+      }
+    }
+  }
 }
 function saveData() {
-  localStorage.setItem('ccg2_data', JSON.stringify({ cardCounts, history, milestones, cardImages }));
+  localStorage.setItem('ccg2_data', JSON.stringify({ cardCounts, history, milestones, cardImages, version: 3 }));
 }
 
 // ==================== HELPERS ====================
 function catOf(id) { return id.replace(/\d+/, ''); }
-function numOf(id) { return parseInt(id.replace(/[a-z]+/, '')); }
-function catDef(id) { return CATEGORIES[catOf(id)]; }
+function numOf(id) { return parseInt(id.replace(/[a-zA-Z]+/, '')); }
+function cardInfo(id) { return cardByID(currentPool, id); }
 
 // ==================== POOL & TAB ====================
 function switchPool(pool) {
   currentPool = pool;
   document.querySelectorAll('.pool-btn').forEach(b => b.classList.toggle('active', b.dataset.pool === pool));
+  // 若当前选中稀有度在新池不存在，回退到该池第一个稀有度
+  if (!poolRarities(pool).includes(selectedCat)) {
+    selectedCat = poolRarities(pool)[0] || 'r';
+    currentNum = '';
+  }
   renderCollection(); updateStats(); renderBonus();
+  renderCategoryButtons(); renderNumpad(); updateInputDisplay();
 }
 function switchTab(tab) {
   currentTab = tab;
@@ -84,6 +158,9 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
   const p = document.getElementById('tab-' + tab); if (p) p.classList.add('active');
   const b = document.querySelector(`.tab-item[data-tab="${tab}"]`); if (b) b.classList.add('active');
+  // 分组切换图标仅在收藏页显示
+  const gm = document.getElementById('groupMenu');
+  if (gm) gm.style.display = (tab === 'collection') ? '' : 'none';
   if (tab === 'collection') { renderCollection(); updateStats(); renderBonus(); }
   if (tab === 'history') renderHistory();
   if (tab === 'input') renderNumpad();
@@ -92,25 +169,27 @@ function switchTab(tab) {
 // ==================== STATS ====================
 function updateStats() {
   const c = cardCounts[currentPool] || {};
-  let total = 0, prTotal = 0, rTotal = 0, srTotal = 0, ssrTotal = 0;
+  const totals = {};
   for (const [id, cnt] of Object.entries(c)) {
-    total += cnt;
-    const cat = catOf(id);
-    if (cat === 'pr') prTotal += cnt;
-    else if (cat === 'r') rTotal += cnt;
-    else if (cat === 'sr') srTotal += cnt;
-    else if (cat === 'ssr') ssrTotal += cnt;
+    const card = cardByID(currentPool, id);
+    if (!card) continue;
+    totals[card.rarity] = (totals[card.rarity] || 0) + cnt;
   }
-  // 加上另一个池子的总抽数
-  const other = currentPool === 'xiari' ? 'junuan' : 'xiari';
-  const oc = cardCounts[other] || {};
-  for (const cnt of Object.values(oc)) total += cnt;
+  // 两池总抽数
+  let total = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
+  }
 
-  document.getElementById('statTotal').textContent = total;
-  document.getElementById('statPR').textContent = prTotal;
-  document.getElementById('statR').textContent = rTotal;
-  document.getElementById('statSR').textContent = srTotal;
-  document.getElementById('statSSR').textContent = ssrTotal;
+  // 渲染统计行：总抽数 + 当前池每种稀有度
+  const row = document.getElementById('statsRow');
+  if (row) {
+    let html = `<div class="stat-card"><div class="num orange">${total}</div><div class="lbl">总抽数</div></div>`;
+    for (const r of poolRarities(currentPool)) {
+      html += `<div class="stat-card"><div class="num ${r}-num">${totals[r] || 0}</div><div class="lbl">${RARITY_INFO[r].label}</div></div>`;
+    }
+    row.innerHTML = html;
+  }
   document.getElementById('bonusTotal').textContent = total + ' 抽';
 }
 
@@ -144,35 +223,67 @@ function editMilestones() {
 }
 
 // ==================== COLLECTION ====================
+function toggleGroupMenu(e) {
+  if (e) e.stopPropagation();
+  const dd = document.getElementById('groupDropdown');
+  if (dd) dd.classList.toggle('show');
+}
+function closeGroupMenu() {
+  const dd = document.getElementById('groupDropdown');
+  if (dd) dd.classList.remove('show');
+}
+function setGroupMode(mode) {
+  groupMode = mode;
+  document.getElementById('groupIconLabel').textContent = (mode === 'rarity') ? '📊' : '🏷️';
+  document.querySelectorAll('.group-option').forEach(o => o.classList.toggle('active', o.dataset.group === mode));
+  closeGroupMenu();
+  renderCollection();
+}
+
 function renderCollection() {
   const grid = document.getElementById('collectionGrid');
   const c = cardCounts[currentPool] || {};
-  const names = CARD_NAMES[currentPool] || {};
+  const cards = poolCards(currentPool);
 
-  // 按类别分组
-  let html = '';
-  const order = ['pr', 'r', 'sr', 'ssr'];
-  const titles = { pr: '📸 拍立得 PR', r: '🎵 音乐卡 R', sr: '👗 米兰卡 SR', ssr: '💎 双面卡 SSR' };
-  const titleCls = { pr: 'pr-title', r: 'r-title', sr: 'sr-title', ssr: 'ssr-title' };
-
-  for (const cat of order) {
-    const def = CATEGORIES[cat];
-    const cards = [];
-    for (let i = 1; i <= def.max; i++) {
-      const id = cat + i;
-      cards.push({ id, name: names[id] || '?', cat, count: c[id] || 0 });
+  // 分组定义：[组标题, 过滤谓词]
+  let groups;
+  if (groupMode === 'rarity') {
+    groups = poolRarities(currentPool).map(r => ({
+      title: `${RARITY_INFO[r].icon} ${RARITY_INFO[r].label}`,
+      cls: r + '-title',
+      cards: cards.filter(card => card.rarity === r),
+    }));
+  } else {
+    // 按卡牌类型
+    groups = poolTypes(currentPool).map(t => ({
+      title: t,
+      cls: 'type-title',
+      cards: cards.filter(card => card.type === t),
+    }));
+  }
+  // 特殊卡牌（特典）独立放最末，仅在按稀有度模式已被含入；按类型模式单独成组
+  if (groupMode === 'type') {
+    const exCards = cards.filter(card => card.rarity === 'ex');
+    if (exCards.length) {
+      groups.push({ title: '🎁 特典', cls: 'ex-title', cards: exCards });
     }
-    html += `<div class="rarity-section"><div class="rarity-title ${titleCls[cat]}">${titles[cat]}</div><div class="card-grid">`;
-    html += cards.map(card => {
+  }
+
+  let html = '';
+  for (const g of groups) {
+    html += `<div class="rarity-section"><div class="rarity-title ${g.cls}">${g.title}</div><div class="card-grid">`;
+    html += g.cards.map(card => {
       const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
+      const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
       const imgHTML = imgs && imgs.front
         ? `<img src="${imgs.front}" alt="${card.id}">`
-        : `<span>${card.id.toUpperCase()}</span>`;
-      return `<div class="card-cell ${card.cat} ${card.count>0?'has':'zero'}" onclick="openModal('${card.id}')">
+        : `<span>${idText}</span>`;
+      const nameText = card.rarity === 'ex' ? card.name : card.name;
+      return `<div class="card-cell ${card.rarity} ${card.count>0?'has':'zero'}" data-count="${c[card.id]||0}" onclick="openModal('${card.id}')">
         <div class="placeholder">${imgHTML}</div>
-        <div class="cid">${card.id.toUpperCase()}</div>
-        <div class="cname">${card.name}</div>
-        <div class="badge">${card.count}</div>
+        <div class="cid">${idText}</div>
+        <div class="cname">${nameText}</div>
+        <div class="badge">${c[card.id]||0}</div>
       </div>`;
     }).join('');
     html += '</div></div>';
@@ -183,18 +294,17 @@ function renderCollection() {
 // ==================== MODAL ====================
 function openModal(id) {
   modalCard = id;
-  const names = CARD_NAMES[currentPool];
   const c = cardCounts[currentPool] || {};
-  const cat = catOf(id);
-  const def = CATEGORIES[cat];
+  const card = cardByID(currentPool, id);
+  if (!card) return;
 
-  document.getElementById('modalCid').textContent = id.toUpperCase();
-  document.getElementById('modalName').textContent = (names && names[id]) || '?';
-  document.getElementById('modalRarity').textContent = def.icon + ' ' + def.name;
+  document.getElementById('modalCid').textContent = card.rarity === 'ex' ? '★' : id.toUpperCase();
+  document.getElementById('modalName').textContent = card.name;
+  document.getElementById('modalRarity').textContent = `${RARITY_INFO[card.rarity].icon} ${RARITY_INFO[card.rarity].label}`;
   document.getElementById('modalCount').textContent = c[id] || 0;
 
   const front = document.getElementById('modalFront');
-  front.className = 'modal-face front ' + cat + '-face';
+  front.className = 'modal-face front ' + card.rarity + '-face';
   const imgs = cardImages[currentPool] && cardImages[currentPool][id];
   if (imgs && imgs.front) {
     document.getElementById('modalFrontImg').src = imgs.front; document.getElementById('modalFrontImg').style.display='block';
@@ -202,6 +312,7 @@ function openModal(id) {
   } else {
     document.getElementById('modalFrontImg').style.display='none';
     document.getElementById('modalFrontPH').style.display='block';
+    document.getElementById('modalFrontPH').textContent = card.rarity === 'ex' ? '🎁' : (RARITY_INFO[card.rarity].icon || '🃏');
   }
   if (imgs && imgs.back) {
     document.getElementById('modalBackImg').src = imgs.back; document.getElementById('modalBackImg').style.display='block';
@@ -234,22 +345,27 @@ function adjustCard(delta) {
 // ==================== SCREENSHOT OCR（中文识别版）====================
 let tessWorker = null;
 
-// 中文卡名 → ID 前缀映射
+// 中文卡名 → 稀有度映射（仅保留中文卡牌类型名，不含英文缩写以避免子串误匹配）
 const CN_CAT_MAP = {
-  '拍立得': 'pr', '音乐卡': 'r', '米兰卡': 'sr', '双面卡': 'ssr',
-  '音乐': 'r', '米兰': 'sr', '拍立': 'pr', '双面': 'ssr',
-  'pr': 'pr', 'PR': 'pr', 'Pr': 'pr',
-  'sr': 'sr', 'SR': 'sr', 'Sr': 'sr',
-  'ssr': 'ssr', 'SSR': 'ssr', 'Ssr': 'ssr',
-  'r': 'r', 'R': 'r',
+  '日常卡': 'r', '音乐卡': 'sr', '涂鸦卡': 'ssr', '路透卡': 'pr', '拍立得': 'ur',
+  '镂空卡': 'hr', '衣料卡': 'hr',
+  '角色卡': 'r', '拼图卡': 'sr', '月历卡': 'ssr', '工艺卡': 'sp', '未公开角色卡': 'ur',
 };
 
-// 已知所有有效卡号的中文名列表（用于匹配）
+// 中文卡名 + 数字 正则（宽松匹配，允许中间有分隔符）
 const CN_CARD_PATTERNS = [
-  { pattern: /拍\s*立\s*得\s*[·.]?\s*(\d{1,2})/g, cat: 'pr' },
-  { pattern: /音\s*乐\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'r' },
-  { pattern: /米\s*兰\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sr' },
-  { pattern: /双\s*面\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ssr' },
+  { pattern: /日\s*常\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'r' },
+  { pattern: /音\s*乐\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sr' },
+  { pattern: /涂\s*鸦\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ssr' },
+  { pattern: /路\s*透\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'pr' },
+  { pattern: /拍\s*立\s*得\s*[·.]?\s*(\d{1,2})/g, cat: 'ur' },
+  { pattern: /镂\s*空\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'hr' },
+  { pattern: /衣\s*料\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'hr' },
+  { pattern: /角\s*色\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'r' },
+  { pattern: /拼\s*图\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sr' },
+  { pattern: /月\s*历\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ssr' },
+  { pattern: /工\s*艺\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sp' },
+  { pattern: /未\s*公\s*开\s*角\s*色\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ur' },
 ];
 
 // 图片预处理：放大+增强对比度
@@ -317,6 +433,7 @@ async function handleScreenshots(event) {
   const accumulated = {};
   let grandExpected = 0;
   const allDebug = [];
+  const validIDs = new Set(poolIDs(currentPool)); // 仅匹配当前池
 
   for (let fi = 0; fi < files.length; fi++) {
     const file = files[fi];
@@ -356,8 +473,6 @@ async function handleScreenshots(event) {
         console.log('=== 单词 ===');
         console.log(allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '));
 
-        const found = new Set();
-
         // 每个策略独立计数，最后取最大值（避免重复计数）
         const strategyResults = [];
 
@@ -368,17 +483,20 @@ async function handleScreenshots(event) {
           while ((m = pattern.exec(fullText)) !== null) {
             const num = parseInt(m[1]);
             const id = cat + num;
-            if (ALL_CARD_IDS.includes(id)) cntA[id] = (cntA[id] || 0) + 1;
+            if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
           }
         }
         strategyResults.push(cntA);
 
-        // === 策略B：匹配英文缩写 PR1, R3, SR2 等 ===
+        // === 策略B：匹配英文缩写 PR1, R3, SR2 等（加 \b 词边界避免 SSR 内部匹配 SR）===
         const cntB = {};
         const enPatterns = [
-          /(pr|PR|Pr)\s*(\d{1,2})/g,
-          /(sr|SR|Sr)\s*(\d{1,2})/g,
-          /(ssr|SSR|Ssr)\s*(\d{1,2})/g,
+          /\b(pr|PR|Pr)\s*(\d{1,2})\b/g,
+          /\b(sr|SR|Sr)\s*(\d{1,2})\b/g,
+          /\b(ssr|SSR|Ssr)\s*(\d{1,2})\b/g,
+          /\b(ur|UR|Ur)\s*(\d{1,2})\b/g,
+          /\b(hr|HR|Hr)\s*(\d{1,2})\b/g,
+          /\b(sp|SP|Sp)\s*(\d{1,2})\b/g,
           /\b(r|R)\s*(\d{1,2})\b/g,
         ];
         for (const pat of enPatterns) {
@@ -387,7 +505,7 @@ async function handleScreenshots(event) {
             const cat = m[1].toLowerCase();
             const num = parseInt(m[2]);
             const id = cat + num;
-            if (ALL_CARD_IDS.includes(id)) cntB[id] = (cntB[id] || 0) + 1;
+            if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
           }
         }
         strategyResults.push(cntB);
@@ -397,11 +515,11 @@ async function handleScreenshots(event) {
         for (const w of allWords) {
           if (w.confidence < 40) continue;
           const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (ALL_CARD_IDS.includes(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
+          if (validIDs.has(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
         }
         strategyResults.push(cntC);
 
-        // === 策略D：中文宽松匹配 ===
+        // === 策略D：中文宽松匹配（仅中文卡名，避免英文缩写子串误匹配）===
         const cntD = {};
         const compact = fullText.replace(/[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g, '');
         for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
@@ -409,11 +527,11 @@ async function handleScreenshots(event) {
           let idx = 0;
           while ((idx = compact.indexOf(cnName, idx)) !== -1) {
             const after = compact.slice(idx + cnName.length, idx + cnName.length + 3);
-            const numMatch = after.match(/^(\d)/);
+            const numMatch = after.match(/^(\d{1,2})/);
             if (numMatch) {
               const num = parseInt(numMatch[1]);
               const id = cat + num;
-              if (ALL_CARD_IDS.includes(id)) cntD[id] = (cntD[id] || 0) + 1;
+              if (validIDs.has(id)) cntD[id] = (cntD[id] || 0) + 1;
             }
             idx += cnName.length;
           }
@@ -439,7 +557,7 @@ async function handleScreenshots(event) {
 
         // 合并：每张卡取各策略的最大值
         const imgCounts = {};
-        for (const id of ALL_CARD_IDS) {
+        for (const id of validIDs) {
           let maxCnt = 0;
           for (const sr of strategyResults) {
             if (sr[id] && sr[id] > maxCnt) maxCnt = sr[id];
@@ -501,14 +619,14 @@ async function handleScreenshots(event) {
 
 function renderOCR() {
   const container = document.getElementById('ocrNumbers');
-  const names = CARD_NAMES[currentPool] || {};
 
-  const order = [
-    { cat: 'pr',  icon: '📸', label: '拍立得', ids: ['pr1','pr2','pr3','pr4'] },
-    { cat: 'r',   icon: '🎵', label: '音乐卡', ids: ['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10','r11'] },
-    { cat: 'sr',  icon: '👗', label: '米兰卡', ids: ['sr1','sr2','sr3','sr4'] },
-    { cat: 'ssr', icon: '💎', label: '双面卡', ids: ['ssr1','ssr2'] },
-  ];
+  // 按稀有度动态分组（仅当前池，不含特典）
+  const order = poolRarities(currentPool).filter(r => r !== 'ex').map(r => ({
+    rarity: r,
+    icon: RARITY_INFO[r].icon,
+    label: RARITY_INFO[r].label,
+    ids: poolCards(currentPool).filter(c => c.rarity === r).map(c => c.id),
+  }));
 
   let totalSelected = 0;
   let html = '';
@@ -560,7 +678,6 @@ function renderOCR() {
 
 function adjustOCR(id, delta) {
   const cur = ocrSelected[id] || 0;
-  const max = CATEGORIES[catOf(id)].max;
   const newVal = Math.max(0, Math.min(10, cur + delta));
   if (newVal === 0) {
     delete ocrSelected[id];
@@ -571,7 +688,8 @@ function adjustOCR(id, delta) {
 }
 
 function selectAllOCR() {
-  for (const id of ALL_CARD_IDS) {
+  for (const id of poolIDs(currentPool)) {
+    if (id.startsWith('ex')) continue; // 特典不可 OCR
     ocrSelected[id] = ocrCounts[id] || 0;
   }
   renderOCR();
@@ -607,6 +725,53 @@ function clearOCR() {
 }
 
 // ==================== MANUAL INPUT ====================
+function renderCategoryButtons() {
+  const container = document.getElementById('categorySelect');
+  if (!container) return;
+  const rarities = poolRarities(currentPool);
+  let html = '';
+  for (const r of rarities) {
+    if (r === 'ex') continue; // 特典走单独行
+    const info = RARITY_INFO[r];
+    const active = selectedCat === r ? 'active' : '';
+    html += `<button class="cat-btn ${r}-btn ${active}" data-cat="${r}" onclick="selectCategory('${r}')">
+      <span class="cat-icon">${info.icon}</span><span class="cat-label">${info.label}</span>
+    </button>`;
+  }
+  container.innerHTML = html;
+
+  // 特殊卡牌一行
+  const specialsRow = document.getElementById('specialsRow');
+  if (specialsRow) {
+    const specials = POOLS[currentPool].specials;
+    html = `<div style="font-size:11px;color:var(--brown-200);margin:2px 0 4px;">🎁 特典（点一次 +1）</div><div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+    specials.forEach((name, i) => {
+      html += `<button class="special-chip" onclick="addSpecial(${i})">${name}</button>`;
+    });
+    html += '</div>';
+    specialsRow.innerHTML = html;
+  }
+}
+
+function addSpecial(index) {
+  const id = 'ex' + (index + 1);
+  if (!cardByID(currentPool, id)) return;
+  if (inputMode === 'single') {
+    addCards([id], 'manual');
+    showToast(`✅ 已添加 ${POOLS[currentPool].specials[index]}`);
+  } else {
+    batchCards.push(id);
+    document.getElementById('batchCnt').textContent = batchCards.length;
+    showToast(`✅ 已录 ${POOLS[currentPool].specials[index]}（${batchCards.length}/10）`);
+    if (batchCards.length >= 10) {
+      addCards([...batchCards], 'batch');
+      showToast('✅ 十连已记录！');
+      batchCards = [];
+      document.getElementById('batchCnt').textContent = '0';
+    }
+  }
+}
+
 function selectCategory(cat) {
   selectedCat = cat;
   currentNum = '';
@@ -619,7 +784,8 @@ function selectCategory(cat) {
 
 function renderNumpad() {
   const container = document.getElementById('numpadContainer');
-  const maxNum = CATEGORIES[selectedCat].max;
+  if (!container) return;
+  const maxNum = maxNumForRarity(currentPool, selectedCat);
   const nums = [];
   for (let i = 1; i <= maxNum; i++) nums.push(i);
 
@@ -638,7 +804,6 @@ function renderNumpad() {
 function pressNum(n) {
   currentNum = n;
   updateInputDisplay();
-  // 在单抽模式下，选了数字后高亮，再次点添加
 }
 function pressDel() {
   currentNum = '';
@@ -646,14 +811,15 @@ function pressDel() {
 }
 function updateInputDisplay() {
   const display = document.getElementById('inputDisplay');
+  const validIDs = new Set(poolIDs(currentPool));
   if (!currentNum) {
     display.innerHTML = '<span style="color:var(--brown-200);font-size:18px;">选类别 → 点数字 → 添加</span>';
   } else {
     const id = selectedCat + currentNum;
-    const names = CARD_NAMES[currentPool];
-    const def = CATEGORIES[selectedCat];
-    const name = (names && names[id]) || '?';
-    display.innerHTML = `<span>${id.toUpperCase()}</span><div class="preview">${def.icon} ${def.name} · ${name}</div>`;
+    const card = cardByID(currentPool, id);
+    const info = RARITY_INFO[selectedCat];
+    const name = (card && card.name) || '?';
+    display.innerHTML = `<span>${id.toUpperCase()}</span><div class="preview">${info.icon} ${info.label} · ${name}</div>`;
   }
   document.getElementById('batchCnt').textContent = batchCards.length;
 }
@@ -661,7 +827,7 @@ function updateInputDisplay() {
 function pressAdd() {
   if (!currentNum) { showToast('⚠️ 请先选择数字'); return; }
   const id = selectedCat + currentNum;
-  if (!ALL_CARD_IDS.includes(id)) { showToast('⚠️ 无效卡号'); return; }
+  if (!cardByID(currentPool, id)) { showToast('⚠️ 无效卡号'); return; }
 
   if (inputMode === 'single') {
     addCards([id], 'manual');
@@ -726,12 +892,14 @@ function renderHistory() {
     const ts = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
     const pn = h.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
     const tl = { ocr:'📸截图', batch:'🔟十连', manual:'🂡单抽', adjust:'✏️调整' }[h.type] || h.type;
-    const names = CARD_NAMES[h.pool] || {};
     return `<div class="history-item">
       <div class="history-header"><span class="history-pool">${pn} · ${tl}</span><span class="history-time">${ts}</span></div>
       <div class="history-cards">${h.cards.map(id => {
-        const cat = catOf(id);
-        return `<span class="history-chip chip-${cat}">${id.toUpperCase()} ${names[id]||'?'}</span>`;
+        const card = cardByID(h.pool, id);
+        const cat = card ? card.rarity : catOf(id);
+        const name = card ? card.name : '?';
+        const idText = cat === 'ex' ? '★' : id.toUpperCase();
+        return `<span class="history-chip chip-${cat}">${idText} ${name}</span>`;
       }).join('')}</div>
     </div>`;
   }).join('');
@@ -742,7 +910,7 @@ function clearHistory() {
 
 // ==================== EXPORT ====================
 function exportData() {
-  const json = JSON.stringify({ cardCounts, history, milestones, cardImages, version: 2 }, null, 2);
+  const json = JSON.stringify({ cardCounts, history, milestones, cardImages, version: 3 }, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   if (navigator.share) {
@@ -773,6 +941,8 @@ function importData() {
         milestones = data.milestones || milestones;
         cardImages = data.cardImages || { xiari: {}, junuan: {} };
         saveData();
+        // 迁移导入的旧数据
+        loadData();
         updateStats(); renderCollection(); renderHistory(); renderBonus();
         showToast('📥 数据已导入');
       } catch(err) { showToast('⚠️ 文件格式错误'); }
@@ -812,3 +982,8 @@ switchTab('collection');
 switchPool('xiari');
 renderNumpad();
 renderBonus();
+// 点外部收起分组下拉
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('groupMenu');
+  if (menu && !menu.contains(e.target)) closeGroupMenu();
+});
