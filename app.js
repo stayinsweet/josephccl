@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 2100000;
+const GLOBAL_TOTAL_DRAWS = 0;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -564,7 +564,7 @@ function renderRewardPool() {
           const phHTML = c.unlocked
             ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
             : `<img src="${img}" alt="${c.name}" class="locked-img"><span class="reward-ph locked-emoji">🔒</span>`;
-          return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}" onclick="openRewardModal('${c.name}','${title.replace(/'/g, '').replace(/🍏|🍉/g,'').trim()}','${c.tier}',${c.unlocked})">
+          return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}" onclick="openRewardModal('${c.name}','${title.replace(/'/g, '').replace(/🍏|🍉/g, '').trim()}','${c.tier}',${c.unlocked})">
           <div class="reward-ph-wrap">${phHTML}</div>
           <div class="reward-name">${c.name}</div>
           <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
@@ -589,7 +589,8 @@ function renderOverview() {
   const total = totalDraws();
   const collected = collectedCount();
   const poolTotal = poolTotalCount();
-  const rewardUnlocked = personalUnlockedCount() + globalUnlockedCount() + extraUnlockedCount();
+  const rewardUnlocked =
+    personalUnlockedCount() + globalUnlockedCount() + extraUnlockedCount();
   const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length + EXTRA_TOTAL; // 18 + 7 + 4 = 29
 
   const poolPct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
@@ -630,22 +631,51 @@ function overviewCards() {
     const c = cardCounts[pool] || {};
     for (const card of poolCards(pool)) {
       if (card.rarity === 'ex') continue;
-      list.push({ name: card.name, img: card.img, owned: (c[card.id] || 0) > 0, sub: POOLS[pool].name });
+      list.push({
+        name: card.name,
+        img: card.img,
+        owned: (c[card.id] || 0) > 0,
+        sub: POOLS[pool].name,
+      });
     }
   }
   // 奖励卡（个人满赠）
   PERSONAL_BONUS.forEach(m => {
-    m.rewards.forEach(name => list.push({ name, img: rewardImg(name), owned: personalTierUnlocked(m), sub: '个人满赠' }));
+    m.rewards.forEach(name =>
+      list.push({
+        name,
+        img: rewardImg(name),
+        owned: personalTierUnlocked(m),
+        sub: '个人满赠',
+      }),
+    );
   });
   // 全员满赠
   const personalEligible = totalDraws() > GLOBAL_PERSONAL_MIN;
   GLOBAL_BONUS.forEach(m => {
-    list.push({ name: m.card, img: rewardImg(m.card), owned: GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible, sub: '全员满赠' });
+    list.push({
+      name: m.card,
+      img: rewardImg(m.card),
+      owned: GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible,
+      sub: '全员满赠',
+    });
   });
   // 限时礼
-  ['限时卡1', '限时卡2', '限时卡3'].forEach(name => list.push({ name, img: rewardImg(name), owned: limitedUnlocked(name), sub: '限时礼' }));
+  ['限时卡1', '限时卡2', '限时卡3'].forEach(name =>
+    list.push({
+      name,
+      img: rewardImg(name),
+      owned: limitedUnlocked(name),
+      sub: '限时礼',
+    }),
+  );
   // 宣传礼
-  list.push({ name: '宣传卡', img: rewardImg('宣传卡'), owned: promoUnlocked(), sub: '宣传礼' });
+  list.push({
+    name: '宣传卡',
+    img: rewardImg('宣传卡'),
+    owned: promoUnlocked(),
+    sub: '宣传礼',
+  });
   return list;
 }
 
@@ -653,26 +683,37 @@ function renderOverviewTab() {
   const body = document.getElementById('overviewBody');
   if (!body) return;
   const all = overviewCards();
-  const filtered = overviewTab === 'owned' ? all.filter(c => c.owned) : all.filter(c => !c.owned);
-  const cells = filtered.map(c => `
+  const filtered =
+    overviewTab === 'owned'
+      ? all.filter(c => c.owned)
+      : all.filter(c => !c.owned);
+  const cells = filtered
+    .map(
+      c => `
     <div class="ov-card-cell">
       <div class="ov-card-img-wrap"><img src="${c.img}" alt="${c.name}" onerror="this.style.display='none'"></div>
       <div class="ov-card-name">${c.name}</div>
       <div class="ov-card-sub">${c.sub}</div>
-    </div>`).join('');
+    </div>`,
+    )
+    .join('');
   body.innerHTML = `<div class="ov-count">${overviewTab === 'owned' ? '✅ 已拥有' : '🔒 未拥有'} ${filtered.length} 张</div>
     <div class="ov-grid">${filtered.length ? cells : '<div style="text-align:center;color:var(--brown-200);padding:30px;grid-column:1/-1;">暂无</div>'}</div>`;
 }
 
 function openOverviewModal() {
   overviewTab = 'owned';
-  document.querySelectorAll('.overview-tab').forEach(t => t.classList.toggle('active', t.dataset.otab === 'owned'));
+  document
+    .querySelectorAll('.overview-tab')
+    .forEach(t => t.classList.toggle('active', t.dataset.otab === 'owned'));
   renderOverviewTab();
   document.getElementById('overviewModal').style.display = 'flex';
 }
 function switchOvTab(tab) {
   overviewTab = tab;
-  document.querySelectorAll('.overview-tab').forEach(t => t.classList.toggle('active', t.dataset.otab === tab));
+  document
+    .querySelectorAll('.overview-tab')
+    .forEach(t => t.classList.toggle('active', t.dataset.otab === tab));
   renderOverviewTab();
 }
 function closeOverviewModal() {
@@ -985,7 +1026,8 @@ function openModal(id) {
   document.getElementById('modalRarity').textContent =
     `${RARITY_INFO[card.rarity].icon} ${RARITY_INFO[card.rarity].label}`;
   document.getElementById('modalCount').textContent = c[id] || 0;
-  document.getElementById('modalCountLine').innerHTML = `持有 <span id="modalCount">${c[id] || 0}</span> 张`;
+  document.getElementById('modalCountLine').innerHTML =
+    `持有 <span id="modalCount">${c[id] || 0}</span> 张`;
 
   const front = document.getElementById('modalFront');
   front.className = 'modal-face front ' + card.rarity + '-face';
@@ -1019,8 +1061,12 @@ function closeModal() {
 function openRewardModal(name, source, tier, unlocked) {
   document.getElementById('modalCid').textContent = name;
   document.getElementById('modalName').textContent = source;
-  document.getElementById('modalRarity').textContent = unlocked ? '✅ 已解锁' : '🔒 未解锁';
-  document.getElementById('modalCountLine').textContent = unlocked ? `解锁条件：${tier}` : `解锁条件：${tier}`;
+  document.getElementById('modalRarity').textContent = unlocked
+    ? '✅ 已解锁'
+    : '🔒 未解锁';
+  document.getElementById('modalCountLine').textContent = unlocked
+    ? `解锁条件：${tier}`
+    : `解锁条件：${tier}`;
 
   const front = document.getElementById('modalFront');
   front.className = 'modal-face front reward-face';
