@@ -52,7 +52,7 @@ const RARITY_ORDER = ['r', 'pr', 'sr', 'ssr', 'sp', 'ur', 'hr', 'ex'];
 // 缓存：每池的卡牌数组 / id 列表 / 稀有度顺序 / 卡牌类型顺序
 const _poolCardsCache = {};
 // 橘暖池 png 扩展名的卡（其余编号卡为 jpg）
-const PNG_IDS = new Set(['r10', 'r11', 'r12', 'r13', 'r14']);
+const PNG_IDS = new Set(['r10', 'r11', 'r12', 'r13']);
 // 编号卡图片路径：两池统一小写（橘暖池 r10-14 为 png 其余 jpg）
 function numberedImgPath(pool, id) {
   const dir = POOLS[pool].imgDir;
