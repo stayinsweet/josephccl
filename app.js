@@ -1186,16 +1186,18 @@ async function getWorker() {
 
 // 通过文本里的卡牌类型名判断属于哪个池
 function detectPool(text) {
+  // 去空格，避免「音乐 卡」之类漏匹配
+  const t = text.replace(/\s+/g, '');
   const xiariTypes = ['日常卡', '音乐卡', '涂鸦卡', '路透卡', '拍立得', '镂空卡', '衣料卡'];
   const junuanTypes = ['角色卡', '拼图卡', '月历卡', '工艺卡', '未公开角色卡'];
   let xiariHits = 0, junuanHits = 0;
-  for (const t of xiariTypes) {
+  for (const name of xiariTypes) {
     let i = 0;
-    while ((i = text.indexOf(t, i)) !== -1) { xiariHits++; i += t.length; }
+    while ((i = t.indexOf(name, i)) !== -1) { xiariHits++; i += name.length; }
   }
-  for (const t of junuanTypes) {
+  for (const name of junuanTypes) {
     let i = 0;
-    while ((i = text.indexOf(t, i)) !== -1) { junuanHits++; i += t.length; }
+    while ((i = t.indexOf(name, i)) !== -1) { junuanHits++; i += name.length; }
   }
   if (xiariHits > junuanHits) return 'xiari';
   if (junuanHits > xiariHits) return 'junuan';
@@ -1331,14 +1333,20 @@ async function handleScreenshots(event) {
             allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
           );
 
-          // 判断本张图属于哪个池，动态取有效卡 id（以第一张判出的池为准）
-          if (!detectedPool) {
-            detectedPool = detectPool(fullText) || currentPool;
-            if (detectedPool !== currentPool) {
-              switchPool(detectedPool); // 自动切换到识别出的池
+          // 判断本张图属于哪个池（每张都判，取首个能判出的池；判不出则沿用已判出的或当前池）
+          const imgPoolDetected = detectPool(fullText);
+          if (imgPoolDetected) {
+            if (!detectedPool) {
+              detectedPool = imgPoolDetected;
+              if (detectedPool !== currentPool) {
+                switchPool(detectedPool); // 自动切换到识别出的池
+              }
+            } else if (detectedPool !== imgPoolDetected) {
+              // 跨池图：以已判出的池为准，忽略不同池的卡
             }
           }
-          const validIDs = new Set(poolIDs(detectedPool));
+          const poolForMatch = detectedPool || currentPool;
+          const validIDs = new Set(poolIDs(poolForMatch));
 
           // 两轮分别匹配，每张卡取两轮中的最大值（避免拼接文本导致重复计数）
           const cnt1 = matchCardCounts(ret1.data.text, ret1.data.words, validIDs);
