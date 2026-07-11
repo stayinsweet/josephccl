@@ -2,780 +2,181 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🍒奇妙浆果园・限定抽抽乐 个人小卡收集统计工具</title>
-<style>
-/* 全局基础样式 */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif;
-}
-body {
-  background: linear-gradient(135deg, #fff3e8 0%, #ffe6ee 100%);
-  min-height: 100vh;
-  padding: 12px;
-  color: #333;
-}
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.header-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px 20px;
-  box-shadow: 0 4px 12px rgba(240, 160, 120, 0.15);
-  margin-bottom: 16px;
-}
-h1 {
-  color: #e67040;
-  font-size: 20px;
-  margin-bottom: 8px;
-}
-.desc-text {
-  font-size: 13px;
-  color: #777;
-  line-height: 1.6;
-}
-/* Tab导航栏 */
-.tab-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-  background: #fff;
-  padding: 10px;
-  border-radius: 14px;
-}
-.tab-btn {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 10px;
-  background: #ffe8dd;
-  color: #c25a30;
-  cursor: pointer;
-  font-size: 13px;
-  transition: 0.2s;
-}
-.tab-btn.active {
-  background: #f28b66;
-  color: white;
-}
-.tab-content {
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 4px 12px rgba(240, 160, 120, 0.12);
-  min-height: 500px;
-}
-.tab-panel {
-  display: none;
-}
-.tab-panel.active {
-  display: block;
-}
-/* 统计看板区块 */
-.stat-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.stat-card {
-  padding: 12px;
-  border-radius: 12px;
-  background: #fff8f3;
-  text-align: center;
-}
-.stat-card h3 {
-  font-size: 24px;
-  color: #e06838;
-  margin-bottom: 4px;
-}
-.stat-card p {
-  font-size: 13px;
-  color: #888;
-}
-/* 进度条样式 */
-.progress-wrap {
-  margin: 14px 0;
-}
-.progress-title {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  margin-bottom: 6px;
-}
-.progress-bar-box {
-  width: 100%;
-  height: 16px;
-  background: #ffe0d0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.progress-bar-inner {
-  height: 100%;
-  background: linear-gradient(90deg, #f28b66, #ff9d80);
-  border-radius: 8px;
-  transition: 0.3s;
-}
-.server-tip {
-  font-size: 12px;
-  color: #999;
-  margin-top: 4px;
-}
-/* 卡牌网格布局 */
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-.card-item {
-  border-radius: 12px;
-  padding: 10px;
-  border: 1px solid #eee;
-  transition: opacity 0.2s;
-}
-.card-item.no-have {
-  opacity: 0.3;
-}
-.card-name {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 6px;
-}
-.card-op {
-  display: flex;
-  gap: 4px;
-  margin: 6px 0;
-}
-.card-op button {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 6px;
-  background: #ffe0d0;
-  color: #c25a30;
-  cursor: pointer;
-}
-.card-count {
-  font-size: 14px;
-  font-weight: bold;
-}
-.card-img-input {
-  width: 100%;
-  font-size: 11px;
-  padding: 4px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  margin-top: 4px;
-}
-/* 稀有度底色定义 */
-.r-R { background: #f0f4f8; }
-.r-PR { background: #e8f6ff; }
-.r-SR { background: #fff7e0; }
-.r-SSR { background: #ffe8f0; }
-.r-UR { background: #f4e8ff; }
-.r-HR { background: #e8fff2; }
-.r-SP { background: #fff0d8; }
-.r-TR { background: #ffe6cc; }
-.r-special { background: #ffecec; }
-.r-limited { background: #e6ffe6; }
-.r-prize { background: #fff2e6; }
-/* 快捷抽数面板 */
-.batch-box {
-  padding: 12px;
-  background: #fff8f3;
-  border-radius: 12px;
-  margin-bottom: 16px;
-}
-.batch-btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 8px;
-  background: #f28b66;
-  color: white;
-  cursor: pointer;
-  margin: 4px;
-}
-/* 日志列表 */
-.log-item {
-  padding: 8px 10px;
-  border-bottom: 1px solid #eee;
-  font-size: 13px;
-}
-.log-time {
-  color: #999;
-  font-size: 12px;
-}
-/* 设置按钮区域 */
-.set-btn-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 12px 0;
-}
-.set-btn {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-}
-.btn-export { background: #76c893; color: white; }
-.btn-import { background: #60a5fa; color: white; }
-.btn-clear { background: #f87171; color: white; }
-.file-input {
-  display: none;
-}
-/* 阶梯满赠档位列表 */
-.gift-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-}
-.gift-item {
-  padding: 10px;
-  border-radius: 10px;
-  background: #fff8f3;
-}
-/* 响应式适配手机 */
-@media (max-width:640px) {
-  .stat-row { grid-template-columns: 1fr 1fr; }
-  .card-grid { grid-template-columns: repeat(2, 1fr); }
-  h1 { font-size: 17px; }
-}
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="抽抽乐统计">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23FF8C42' width='100' height='100' rx='20'/><text x='50' y='65' text-anchor='middle' fill='white' font-size='50' font-family='sans-serif'>🎴</text></svg>">
+<title>抽抽乐统计</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="container">
-  <div class="header-card">
-    <h1>🍒奇妙浆果园・限定抽抽乐 个人小卡收集统计工具</h1>
-    <div class="desc-text">
-      21年橘色暖霞播种心意，一路深耕成长，演员与歌手双向出彩，26年夏日戏剧迎来满园丰收。<br>
-      活动渠道：vd【曾顺心橘色暖霞俱乐部】｜活动时间：7月12日12:00 12:00 - 8月15日 12:00｜单抽6.8r/抽<br>
-      数据仅保存在浏览器本地缓存，刷新不丢失；全服总抽数固定写在源码内，修改源码不会清除你的藏品数据
+
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <h1>🎴 抽抽乐统计</h1>
+    <div style="display:flex;gap:4px;">
+      <button class="btn btn-sm btn-white" onclick="exportData()">💾</button>
+      <button class="btn btn-sm btn-white" onclick="importData()">📥</button>
+      <button class="btn btn-sm btn-white" onclick="clearAllData()">🗑</button>
     </div>
+  </header>
+
+  <!-- Pool Selector -->
+  <div class="pool-selector">
+    <button class="pool-btn active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
+    <button class="pool-btn" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
   </div>
 
-  <!-- Tab导航 -->
-  <div class="tab-nav">
-    <button class="tab-btn active" data-tab="dash">总览看板</button>
-    <button class="tab-btn" data-tab="pool1">夏日池图鉴</button>
-    <button class="tab-btn" data-tab="pool2">橘暖池图鉴</button>
-    <button class="tab-btn" data-tab="gift">阶梯满赠礼品库</button>
-    <button class="tab-btn" data-tab="limit">限时/宣传/特典卡库</button>
-    <button class="tab-btn" data-tab="award">实物奖品池</button>
-    <button class="tab-btn" data-tab="log">操作记录日志</button>
-    <button class="tab-btn" data-tab="setting">数据设置</button>
-  </div>
+  <!-- Main Content -->
+  <main class="content" id="mainContent">
 
-  <div class="tab-content">
-    <!-- 1.总览看板 -->
-    <div class="tab-panel active" id="dash">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">个人收集数据看板</h2>
-      <div class="stat-row">
-        <div class="stat-card">
-          <h3 id="stat-pool1">0</h3>
-          <p>夏日池总抽数</p>
+    <!-- Tab 1: 我的收藏 -->
+    <div class="tab-page active" id="tab-collection">
+      <div class="stats-row">
+        <div class="stat-card"><div class="num orange" id="statTotal">0</div><div class="lbl">总抽数</div></div>
+        <div class="stat-card"><div class="num pr-num" id="statPR">0</div><div class="lbl">拍立得</div></div>
+        <div class="stat-card"><div class="num r-num" id="statR">0</div><div class="lbl">音乐卡</div></div>
+        <div class="stat-card"><div class="num sr-num" id="statSR">0</div><div class="lbl">米兰卡</div></div>
+        <div class="stat-card"><div class="num ssr-num" id="statSSR">0</div><div class="lbl">双面卡</div></div>
+      </div>
+
+      <div class="bonus-section">
+        <div class="bonus-header">
+          <h3>🎁 满赠进度</h3>
+          <span class="bonus-total" id="bonusTotal">0 抽</span>
         </div>
-        <div class="stat-card">
-          <h3 id="stat-pool2">0</h3>
-          <p>橘暖池总抽数</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="stat-total">0</h3>
-          <p>双池合计抽数</p>
-        </div>
-        <div class="stat-card">
-          <h3 id="stat-rate">0%</h3>
-          <p>图鉴收集完成率</p>
+        <div id="bonusMilestones"></div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-sm btn-outline" onclick="editMilestones()">⚙️ 设置满赠档位</button>
         </div>
       </div>
 
-      <div class="batch-box">
-        <h4>快捷录入抽数（快速增加抽数，自动记录日志）</h4>
-        <p style="font-size:13px;margin:6px 0;">夏日池快捷：<button class="batch-btn" data-pool="pool1" data-num="10">+10抽</button><button class="batch-btn" data-pool="pool1" data-num="20">+20抽</button></p>
-        <p style="font-size:13px;margin:6px 0;">橘暖池快捷：<button class="batch-btn" data-pool="pool2" data-num="10">+10抽</button><button class="batch-btn" data-pool="pool2" data-num="20">+20抽</button></p>
-      </div>
+      <div id="collectionGrid"></div>
+    </div>
 
-      <!-- 个人阶梯满赠进度 -->
-      <div class="progress-wrap">
-        <div class="progress-title">
-          <span>个人合计阶梯满赠进度</span>
-          <span id="gift-progress-text">当前0抽 / 300抽</span>
+    <!-- Tab 2: 截图识别 -->
+    <div class="tab-page" id="tab-ocr">
+      <div style="text-align:center;font-size:13px;color:var(--brown-200);margin-bottom:12px;">📸 可一次选多张截图，依次识别后结果累加</div>
+      <input type="file" id="screenshotInput" accept="image/*" multiple onchange="handleScreenshots(event)">
+      <div class="upload-zone" onclick="document.getElementById('screenshotInput').click()" id="uploadZone">
+        <div class="icon">📷</div><div class="text">点击上传截图（支持多选）</div><div class="hint">拍照或从相册批量选择 · 结果自动累加</div>
+      </div>
+      <div class="upload-preview" id="uploadPreview">
+        <img id="previewImg" src="" alt="预览">
+        <div class="ocr-result">
+          <div class="ocr-title" id="ocrStatus">🤖 识别到的卡号（点击可剔除误识别）：</div>
+          <div class="ocr-loading" id="ocrLoading">
+            <div style="font-size:28px;animation:pulse 1s infinite;">🔍</div>
+            <div style="font-size:13px;color:var(--brown-200);margin-top:6px;">正在识别截图中的卡号...</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+            <button class="btn btn-sm btn-outline" onclick="selectAllOCR()">✅ 全选</button>
+            <button class="btn btn-sm btn-outline" onclick="deselectAllOCR()">✕ 清空</button>
+            <span id="ocrExpectedHint" style="font-size:11px;color:var(--brown-200);margin-left:auto;"></span>
+          </div>
+          <div class="ocr-nums" id="ocrNumbers"></div>
         </div>
-        <div class="progress-bar-box">
-          <div class="progress-bar-inner" id="gift-progress-bar" style="width:0%"></div>
+        <div class="btn-row">
+          <button class="btn btn-outline" onclick="clearOCR()">✕ 取消</button>
+          <button class="btn btn-primary" onclick="confirmOCR()">✅ 确认添加 (<span id="ocrCount">0</span>张)</button>
         </div>
-        <div style="font-size:12px;color:#777;margin-top:4px;">档位：20/30/40/50/60/70/80/90/120/150/180/210/240/270/300抽</div>
       </div>
+      <div style="margin-top:14px;padding:14px;background:var(--orange-50);border-radius:12px;font-size:12px;color:var(--brown-200);line-height:1.8;">
+        <div style="font-weight:600;color:var(--brown-800);margin-bottom:4px;">💡 截图技巧</div>
+        • 可一次选择多张截图，依次识别后结果累加<br>• 卡号格式：PR1、R3、SR2 等<br>• 识别结果每张卡有 ± 按钮调整数量<br>• 右侧提示「与奖品位一致」即可放心确认
+      </div>
+    </div>
 
-      <!-- 全服满赠进度（硬编码固定值） -->
-      <div class="progress-wrap">
-        <div class="progress-title">
-          <span>全服总量全员特典进度</span>
-          <span id="server-progress-text">0 / 210000</span>
+    <!-- Tab 3: 手动输入 -->
+    <div class="tab-page" id="tab-input">
+      <div class="input-display">
+        <div class="input-current" id="inputDisplay">
+          <span style="color:var(--brown-200);font-size:18px;">选择卡牌类别</span>
         </div>
-        <div class="progress-bar-box">
-          <div class="progress-bar-inner" id="server-progress-bar" style="width:0%"></div>
-        </div>
-        <div class="server-tip">全服数据每日24点更新，数值写死在源码JS内，修改源码不会清空本地藏品；档位：3/6/9/12/15/18/21万抽解锁特典1-7</div>
       </div>
 
-      <div style="margin-top:16px;">
-        <h4>各稀有度持有统计</h4>
-        <div id="rare-stat" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+      <div class="input-mode-toggle">
+        <button class="input-mode-btn active" onclick="setInputMode('single')" id="modeSingle">🂡 单抽</button>
+        <button class="input-mode-btn" onclick="setInputMode('batch')" id="modeBatch">🔟 十连</button>
+      </div>
+      <div class="batch-info" id="batchInfo">本轮已录 <span class="cnt" id="batchCnt">0</span> / 10 张</div>
+
+      <div class="category-select" style="flex-wrap:wrap;">
+        <button class="cat-btn pr-btn active" data-cat="pr" onclick="selectCategory('pr')">
+          <span class="cat-icon">📸</span><span class="cat-label">拍立得 PR</span>
+        </button>
+        <button class="cat-btn r-btn" data-cat="r" onclick="selectCategory('r')">
+          <span class="cat-icon">🎵</span><span class="cat-label">音乐卡 R</span>
+        </button>
+        <button class="cat-btn sr-btn" data-cat="sr" onclick="selectCategory('sr')">
+          <span class="cat-icon">👗</span><span class="cat-label">米兰卡 SR</span>
+        </button>
+        <button class="cat-btn ssr-btn" data-cat="ssr" onclick="selectCategory('ssr')">
+          <span class="cat-icon">💎</span><span class="cat-label">双面卡 SSR</span>
+        </button>
+      </div>
+
+      <div class="numpad" id="numpadContainer"></div>
+      <button class="btn btn-outline" style="width:100%;margin-top:4px;" onclick="undoLast()">↩ 撤销上一次</button>
+    </div>
+
+    <!-- Tab 4: 记录 -->
+    <div class="tab-page" id="tab-history">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <span style="font-weight:700;font-size:16px;">📝 抽卡记录</span>
+        <button class="btn btn-sm btn-outline" onclick="clearHistory()">🗑 清空</button>
+      </div>
+      <div id="historyList">
+        <div style="text-align:center;padding:40px;color:var(--brown-200);">🃏 还没有抽卡记录</div>
       </div>
     </div>
+  </main>
 
-    <!-- 2.夏日池图鉴 -->
-    <div class="tab-panel" id="pool1">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">夏日池（个人池）全卡牌图鉴</h2>
-      <div id="pool1-card-grid" class="card-grid"></div>
-    </div>
+  <!-- Bottom Tab Bar -->
+  <nav class="tab-bar">
+    <button class="tab-item active" data-tab="collection" onclick="switchTab('collection')">
+      <span class="tab-icon">📊</span>我的收藏
+    </button>
+    <button class="tab-item" data-tab="ocr" onclick="switchTab('ocr')">
+      <span class="tab-icon">📷</span>截图识别
+    </button>
+    <button class="tab-item" data-tab="input" onclick="switchTab('input')">
+      <span class="tab-icon">🔢</span>手动输入
+    </button>
+    <button class="tab-item" data-tab="history" onclick="switchTab('history')">
+      <span class="tab-icon">📝</span>记录
+    </button>
+  </nav>
+</div>
 
-    <!-- 3.橘暖池图鉴 -->
-    <div class="tab-panel" id="pool2">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">橘暖池（角色池）全卡牌图鉴</h2>
-      <div id="pool2-card-grid" class="card-grid"></div>
+<!-- Card Detail Modal -->
+<div class="modal-overlay" id="cardModal" style="display:none;" onclick="if(event.target===this)closeModal()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-card-preview">
+      <div class="modal-face front" id="modalFront"><span id="modalFrontPH">🃏</span><img id="modalFrontImg" src="" style="display:none;"></div>
+      <div class="modal-face back" id="modalBack"><span id="modalBackPH">🎴</span><img id="modalBackImg" src="" style="display:none;"></div>
     </div>
-
-    <!-- 4.阶梯满赠礼品库 -->
-    <div class="tab-panel" id="gift">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">个人阶梯满赠礼品库</h2>
-      <div id="gift-grid" class="gift-list"></div>
+    <div class="modal-info">
+      <div class="modal-cid" id="modalCid">pr1</div>
+      <div class="modal-name" id="modalName">卡名</div>
+      <div class="modal-rarity" id="modalRarity">PR</div>
     </div>
-
-    <!-- 5.限时/宣传/特典卡库 -->
-    <div class="tab-panel" id="limit">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">限时下单礼 / 宣传礼 / 全服特典卡</h2>
-      <div id="limit-grid" class="card-grid"></div>
+    <div class="modal-counter">
+      <button onclick="adjustCard(-1)">−</button>
+      <span class="cnt" id="modalCount">0</span>
+      <button onclick="adjustCard(1)">+</button>
     </div>
-
-    <!-- 6.实物奖品池 -->
-    <div class="tab-panel" id="award">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">实物特殊奖品池</h2>
-      <div id="award-grid" class="card-grid"></div>
-    </div>
-
-    <!-- 7.操作日志 -->
-    <div class="tab-panel" id="log">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">全部操作记录（自动保存时间戳）</h2>
-      <div id="log-list"></div>
-    </div>
-
-    <!-- 8.数据设置 -->
-    <div class="tab-panel" id="setting">
-      <h2 style="margin-bottom:12px;font-size:17px;color:#e67040;">本地数据管理</h2>
-      <div class="set-btn-group">
-        <button class="set-btn btn-export" id="export-data">导出本地数据JSON备份</button>
-        <button class="set-btn btn-import" id="trigger-import">导入JSON恢复数据</button>
-        <input type="file" id="import-file" class="file-input" accept=".json">
-        <button class="set-btn btn-clear" id="clear-data">清空全部本地缓存（不可恢复）</button>
-      </div>
-      <div style="margin-top:16px;font-size:13px;color:#777;line-height:1.7;">
-        <p>1. 所有数据仅保存在当前浏览器LocalStorage，清除浏览器缓存会丢失；</p>
-        <p>2. 全服总抽数固定写在页面JS源码中，修改源码数字不会影响你的藏品；</p>
-        <p>3. 清空缓存会删除所有抽数、卡牌、操作日志，建议先导出备份；</p>
-        <p>4. 无任何联网请求，全程离线运行，无数据上传。</p>
-      </div>
-    </div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="adjustCard(1)">➕ 加一抽</button>
+    <button class="btn btn-outline" style="width:100%;" onclick="closeModal()">关闭</button>
   </div>
 </div>
 
-<script>
-// ====================== 1. 硬编码全服总抽数（不存入LocalStorage，仅页面渲染） ======================
-const SERVER_TOTAL_DRAW = 126800; // 如需更新全服数据，仅修改此处数字，刷新页面生效
-const SERVER_MAX_DRAW = 210000;
-const SERVER_GIFT_STEPS = [30000,60000,90000,120000,150000,180000,210000];
+<div class="toast" id="toast"></div>
 
-// ====================== 2. 全局卡牌/礼品基础配置 ======================
-// 2.1 夏日池卡牌
-const POOL1_CARDS = [
-  // R
-  {id:"R1",name:"R1",rare:"R",pool:"pool1"},{id:"R2",name:"R2",rare:"R",pool:"pool1"},{id:"R3",name:"R3",rare:"R",pool:"pool1"},
-  {id:"R4",name:"R4",rare:"R",pool:"pool1"},{id:"R5",name:"R5",rare:"R",pool:"pool1"},{id:"R6",name:"R6",rare:"R",pool:"pool1"},
-  {id:"R7",name:"R7",rare:"R",pool:"pool1"},{id:"R8",name:"R8",rare:"R",pool:"pool1"},{id:"R9",name:"R9",rare:"R",pool:"pool1"},
-  // PR1-PR3
-  {id:"PR1",name:"PR1",rare:"PR",pool:"pool1"},{id:"PR2",name:"PR2",rare:"PR",pool:"pool1"},{id:"PR3",name:"PR3",rare:"PR",pool:"pool1"},
-  // SR1-SR10
-  {id:"SR1",name:"SR1",rare:"SR",pool:"pool1"},{id:"SR2",name:"SR2",rare:"SR",pool:"pool1"},{id:"SR3",name:"SR3",rare:"SR",pool:"pool1"},
-  {id:"SR4",name:"SR4",rare:"SR",pool:"pool1"},{id:"SR5",name:"SR5",rare:"SR",pool:"pool1"},{id:"SR6",name:"SR6",rare:"SR",pool:"pool1"},
-  {id:"SR7",name:"SR7",rare:"SR",pool:"pool1"},{id:"SR8",name:"SR8",rare:"SR",pool:"pool1"},{id:"SR9",name:"SR9",rare:"SR",pool:"pool1"},
-  {id:"SR10",name:"SR10",rare:"SR",pool:"pool1"},
-  // PR4-PR8
-  {id:"PR4",name:"PR4",rare:"PR",pool:"pool1"},{id:"PR5",name:"PR5",rare:"PR",pool:"pool1"},{id:"PR6",name:"PR6",rare:"PR",pool:"pool1"},
-  {id:"PR7",name:"PR7",rare:"PR",pool:"pool1"},{id:"PR8",name:"PR8",rare:"PR",pool:"pool1"},
-  // SSR1-SSR5
-  {id:"SSR1",name:"SSR1",rare:"SSR",pool:"pool1"},{id:"SSR2",name:"SSR2",rare:"SSR",pool:"pool1"},{id:"SSR3",name:"SSR3",rare:"SSR",pool:"pool1"},
-  {id:"SSR4",name:"SSR4",rare:"SSR",pool:"pool1"},{id:"SSR5",name:"SSR5",rare:"SSR",pool:"pool1"},
-  // PR9-PR18
-  {id:"PR9",name:"PR9",rare:"PR",pool:"pool1"},{id:"PR10",name:"PR10",rare:"PR",pool:"pool1"},{id:"PR11",name:"PR11",rare:"PR",pool:"pool1"},
-  {id:"PR12",name:"PR12",rare:"PR",pool:"pool1"},{id:"PR13",name:"PR13",rare:"PR",pool:"pool1"},{id:"PR14",name:"PR14",rare:"PR",pool:"pool1"},
-  {id:"PR15",name:"PR15",rare:"PR",pool:"pool1"},{id:"PR16",name:"PR16",rare:"PR",pool:"pool1"},{id:"PR17",name:"PR17",rare:"PR",pool:"pool1"},
-  {id:"PR18",name:"PR18",rare:"PR",pool:"pool1"},
-  // UR1-UR4
-  {id:"UR1",name:"UR1拍立得",rare:"UR",pool:"pool1"},{id:"UR2",name:"UR2拍立得",rare:"UR",pool:"pool1"},
-  {id:"UR3",name:"UR3拍立得",rare:"UR",pool:"pool1"},{id:"UR4",name:"UR4拍立得",rare:"UR",pool:"pool1"},
-  // HR1-HR3镂空
-  {id:"HR1",name:"HR1镂空卡",rare:"HR",pool:"pool1"},{id:"HR2",name:"HR2镂空卡",rare:"HR",pool:"pool1"},{id:"HR3",name:"HR3镂空卡",rare:"HR",pool:"pool1"},
-  // HR4衣料卡
-  {id:"HR4",name:"HR4衣料卡",rare:"HR",pool:"pool1"},
-  // 池1满10抽赠TR1
-  {id:"TR1",name:"TR1(夏日池10抽赠)",rare:"TR",pool:"gift"}
-];
-
-// 2.2 橘暖池卡牌
-const POOL2_CARDS = [
-  // R1-R14
-  {id:"R14",name:"R14",rare:"R",pool:"pool2"},{id:"R1",name:"R1",rare:"R",pool:"pool2"},{id:"R2",name:"R2",rare:"R",pool:"pool2"},
-  {id:"R3",name:"R3",rare:"R",pool:"pool2"},{id:"R4",name:"R4",rare:"R",pool:"pool2"},{id:"R5",name:"R5",rare:"R",pool:"pool2"},
-  {id:"R6",name:"R6",rare:"R",pool:"pool2"},{id:"R7",name:"R7",rare:"R",pool:"pool2"},{id:"R8",name:"R8",rare:"R",pool:"pool2"},
-  {id:"R9",name:"R9",rare:"R",pool:"pool2"},{id:"R10",name:"R10",rare:"R",pool:"pool2"},{id:"R11",name:"R11",rare:"R",pool:"pool2"},
-  {id:"R12",name:"R12",rare:"R",pool:"pool2"},{id:"R13",name:"R13",rare:"R",pool:"pool2"},
-  // PR1-PR8
-  {id:"PR1",name:"PR1",rare:"PR",pool:"pool2"},{id:"PR2",name:"PR2",rare:"PR",pool:"pool2"},{id:"PR3",name:"PR3",rare:"PR",pool:"pool2"},
-  {id:"PR4",name:"PR4",rare:"PR",pool:"pool2"},{id:"PR5",name:"PR5",rare:"PR",pool:"pool2"},{id:"PR6",name:"PR6",rare:"PR",pool:"pool2"},
-  {id:"PR7",name:"PR7",rare:"PR",pool:"pool2"},{id:"PR8",name:"PR8",rare:"PR",pool:"pool2"},
-  // SR1-SR9拼图
-  {id:"SR1",name:"SR1拼图",rare:"SR",pool:"pool2"},{id:"SR2",name:"SR2拼图",rare:"SR",pool:"pool2"},{id:"SR3",name:"SR3拼图",rare:"SR",pool:"pool2"},
-  {id:"SR4",name:"SR4拼图",rare:"SR",pool:"pool2"},{id:"SR5",name:"SR5拼图",rare:"SR",pool:"pool2"},{id:"SR6",name:"SR6拼图",rare:"SR",pool:"pool2"},
-  {id:"SR7",name:"SR7拼图",rare:"SR",pool:"pool2"},{id:"SR8",name:"SR8拼图",rare:"SR",pool:"pool2"},{id:"SR9",name:"SR9拼图",rare:"SR",pool:"pool2"},
-  // SSR1-SSR12月历
-  {id:"SSR1",name:"SSR1月历",rare:"SSR",pool:"pool2"},{id:"SSR2",name:"SSR2月历",rare:"SSR",pool:"pool2"},{id:"SSR3",name:"SSR3月历",rare:"SSR",pool:"pool2"},
-  {id:"SSR4",name:"SSR4月历",rare:"SSR",pool:"pool2"},{id:"SSR5",name:"SSR5月历",rare:"SSR",pool:"pool2"},{id:"SSR6",name:"SSR6月历",rare:"SSR",pool:"pool2"},
-  {id:"SSR7",name:"SSR7月历",rare:"SSR",pool:"pool2"},{id:"SSR8",name:"SSR8月历",rare:"SSR",pool:"pool2"},{id:"SSR9",name:"SSR9月历",rare:"SSR",pool:"pool2"},
-  {id:"SSR10",name:"SSR10月历",rare:"SSR",pool:"pool2"},{id:"SSR11",name:"SSR11月历",rare:"SSR",pool:"pool2"},{id:"SSR12",name:"SSR12月历",rare:"SSR",pool:"pool2"},
-  // SP1-SP3工艺
-  {id:"SP1",name:"SP1工艺卡",rare:"SP",pool:"pool2"},{id:"SP2",name:"SP2工艺卡",rare:"SP",pool:"pool2"},{id:"SP3",name:"SP3工艺卡",rare:"SP",pool:"pool2"},
-  // UR1-UR2未公开角色
-  {id:"UR1",name:"UR1未公开角色",rare:"UR",pool:"pool2"},{id:"UR2",name:"UR2未公开角色",rare:"UR",pool:"pool2"},
-  // 池2满10抽赠TR2
-  {id:"TR2",name:"TR2(橘暖池10抽赠)",rare:"TR",pool:"gift"}
-];
-
-// 2.3 个人阶梯满赠礼品
-const GIFT_LIST = [
-  {id:"TR3",name:"TR3(20抽)",rare:"TR",step:20},{id:"TR4",name:"TR4(30抽)",rare:"TR",step:30},
-  {id:"TR5",name:"TR5(40抽)",rare:"TR",step:40},{id:"TR6",name:"TR6(50抽)",rare:"TR",step:50},
-  {id:"TR7",name:"TR7(60抽)",rare:"TR",step:60},{id:"TR8",name:"TR8(70抽)",rare:"TR",step:70},
-  {id:"TR9",name:"TR9(80抽)",rare:"TR",step:80},{id:"TR10",name:"TR10(90抽)",rare:"TR",step:90},
-  {id:"TR11",name:"TR11(120抽)",rare:"TR",step:120},{id:"BAICI",name:"白瓷卡(150抽)",rare:"TR",step:150},
-  {id:"SHUIMIN",name:"水敏卡(180抽)",rare:"TR",step:180},{id:"CD",name:"仿真cd(210抽)",rare:"TR",step:210},
-  {id:"KATAO",name:"卡套(240抽)",rare:"TR",step:240},{id:"PL1",name:"仿真拍立得1(270抽)",rare:"TR",step:270},
-  {id:"PL2",name:"仿真拍立得2(300抽)",rare:"TR",step:300},{id:"XUYUAN",name:"许愿卡(300抽)",rare:"TR",step:300}
-];
-
-// 2.4 限时/宣传/全服特典卡
-const LIMIT_CARDS = [
-  // 限时下单礼
-  {id:"LX1",name:"限时卡1",rare:"limited",type:"限时下单"},
-  {id:"LX2",name:"限时卡2",rare:"limited",type:"限时下单"},
-  {id:"LX3",name:"限时卡3",rare:"limited",type:"限时下单"},
-  // 宣传礼
-  {id:"XC1",name:"宣传礼1",rare:"limited",type:"宣传礼"},
-  // 全服特典1-7
-  {id:"TD1",name:"全服特典卡1",rare:"limited",type:"全服特典"},
-  {id:"TD2",name:"全服特典卡2",rare:"limited",type:"全服特典"},
-  {id:"TD3",name:"全服特典卡3",rare:"limited",type:"全服特典"},
-  {id:"TD4",name:"全服特典卡4",rare:"limited",type:"全服特典"},
-  {id:"TD5",name:"全服特典卡5",rare:"limited",type:"全服特典"},
-  {id:"TD6",name:"全服特典卡6",rare:"limited",type:"全服特典"},
-  {id:"TD7",name:"全服特典卡7",rare:"limited",type:"全服特典"}
-];
-
-// 2.5 实物特殊奖品池
-const AWARD_LIST = [
-  // 夏日池实物
-  {id:"AW1",name:"签名照",rare:"special",pool:"pool1"},
-  {id:"AW2",name:"棉花娃娃",rare:"special",pool:"pool1"},
-  {id:"AW3",name:"泡泡玛特",rare:"special",pool:"pool1"},
-  // 橘暖池实物
-  {id:"AW4",name:"未公开亲签拍立得",rare:"special",pool:"pool2"},
-  {id:"AW5",name:"阿玛尼手链",rare:"special",pool:"pool2"},
-  {id:"AW6",name:"阿玛尼墨镜",rare:"special",pool:"pool2"},
-  {id:"AW7",name:"安热沙防晒",rare:"special",pool:"pool2"},
-  // 总量满万棉花娃娃
-  {id:"AW8",name:"晞咘咘棉花娃娃(总抽100009解锁)",rare:"special",pool:"all"}
-];
-
-// 合并全部卡牌用于计算图鉴完成率
-const ALL_CARDS = [...POOL1_CARDS, ...POOL2_CARDS, ...GIFT_LIST, ...LIMIT_CARDS, ...AWARD_LIST];
-
-// ====================== 3. LocalStorage存储工具封装 ======================
-const StorageUtil = {
-  prefix: "card_collect_",
-  set(key, data) {
-    try {
-      localStorage.setItem(this.prefix + key, JSON.stringify(data));
-    } catch (e) {
-      alert("浏览器存储异常，请关闭无痕/隐私模式后重试");
-    }
-  },
-  get(key) {
-    const str = localStorage.getItem(this.prefix + key);
-    if (!str) return null;
-    try { return JSON.parse(str); } catch { return null; }
-  },
-  remove(key) { localStorage.removeItem(this.prefix + key); },
-  clearAll() {
-    const keys = [];
-    for(let i=0;i<localStorage.length;i++){
-      const k = localStorage.key(i);
-      if(k.startsWith(this.prefix)) keys.push(k);
-    }
-    keys.forEach(k=>localStorage.removeItem(k));
-  }
-};
-
-// ====================== 4. 本地数据初始化结构 ======================
-function initLocalData() {
-  // 抽数
-  let drawData = StorageUtil.get("draw");
-  if(!drawData) drawData = {pool1:0, pool2:0};
-  // 卡牌持有 {卡牌id: {count:数量, img:图片地址}}
-  let cardOwn = StorageUtil.get("cards");
-  if(!cardOwn) cardOwn = {};
-  // 操作日志
-  let logList = StorageUtil.get("log");
-  if(!logList) logList = [];
-  return {drawData, cardOwn, logList};
-}
-let localData = initLocalData();
-
-// 保存数据到本地
-function saveLocalData() {
-  StorageUtil.set("draw", localData.drawData);
-  StorageUtil.set("cards", localData.cardOwn);
-  StorageUtil.set("log", localData.logList);
-}
-
-// 添加操作日志
-function addLog(text) {
-  const now = new Date();
-  const timeStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2,"0")}-${now.getDate().toString().padStart(2,"0")} ${now.getHours().toString().padStart(2,"0")}:${now.getMinutes().toString().padStart(2,"0")}:${now.getSeconds().toString().padStart(2,"0")}`;
-  localData.logList.unshift({time:timeStr, content:text, ts:Date.now()});
-  saveLocalData();
-  renderLog();
-}
-
-// ====================== 5. Tab切换逻辑 ======================
-function bindTabSwitch() {
-  const btns = document.querySelectorAll(".tab-btn");
-  const panels = document.querySelectorAll(".tab-panel");
-  btns.forEach(btn=>{
-    btn.onclick = ()=>{
-      const targetId = btn.dataset.tab;
-      btns.forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
-      panels.forEach(p=>p.classList.remove("active"));
-      document.getElementById(targetId).classList.add("active");
-    }
-  })
-}
-
-// ====================== 6. 渲染统计看板 ======================
-function renderDashStat() {
-  const {drawData, cardOwn} = localData;
-  const totalDraw = drawData.pool1 + drawData.pool2;
-  // 基础抽数
-  document.getElementById("stat-pool1").innerText = drawData.pool1;
-  document.getElementById("stat-pool2").innerText = drawData.pool2;
-  document.getElementById("stat-total").innerText = totalDraw;
-
-  // 图鉴完成率
-  let ownTotal = 0;
-  ALL_CARDS.forEach(card=>{
-    if(cardOwn[card.id] && cardOwn[card.id].count > 0) ownTotal++;
-  })
-  const rate = ((ownTotal / ALL_CARDS.length) * 100).toFixed(1);
-  document.getElementById("stat-rate").innerText = rate + "%";
-
-  // 个人阶梯满赠进度
-  const giftMax = 300;
-  const giftPercent = Math.min(totalDraw / giftMax * 100, 100);
-  document.getElementById("gift-progress-bar").style.width = giftPercent + "%";
-  document.getElementById("gift-progress-text").innerText = `当前${totalDraw}抽 / ${giftMax}抽`;
-
-  // 全服硬编码进度
-  const serverPercent = Math.min(SERVER_TOTAL_DRAW / SERVER_MAX_DRAW * 100, 100);
-  document.getElementById("server-progress-bar").style.width = serverPercent + "%";
-  document.getElementById("server-progress-text").innerText = `${SERVER_TOTAL_DRAW} / ${SERVER_MAX_DRAW}`;
-
-  // 稀有度统计
-  const rareMap = {};
-  ALL_CARDS.forEach(c=>{
-    const r = c.rare;
-    if(!rareMap[r]) rareMap[r] = {all:0, own:0};
-    rareMap[r].all++;
-    if(cardOwn[c.id] && cardOwn[c.id].count>0) rareMap[r].own++;
-  })
-  let rareHtml = "";
-  for(let r in rareMap){
-    rareHtml += `<span style="padding:4px 8px;border-radius:6px;background:#ffe8dd;font-size:12px;">${r}:${rareMap[r].own}/${rareMap[r].all}</span>`;
-  }
-  document.getElementById("rare-stat").innerHTML = rareHtml;
-}
-
-// ====================== 7. 卡牌渲染通用函数 ======================
-function renderCardGrid(containerId, cardArr) {
-  const wrap = document.getElementById(containerId);
-  const {cardOwn} = localData;
-  let html = "";
-  cardArr.forEach(card=>{
-    const own = cardOwn[card.id] || {count:0, img:""};
-    const haveClass = own.count > 0 ? "" : "no-have";
-    html += `
-      <div class="card-item r-${card.rare} ${haveClass}" data-cardid="${card.id}">
-        <div class="card-name">[${card.rare}] ${card.name}</div>
-        <div class="card-op">
-          <button class="card-minus" data-id="${card.id}">-</button>
-          <span class="card-count">${own.count}</span>
-          <button class="card-plus" data-id="${card.id}">+</button>
-        </div>
-        <input class="card-img-input" placeholder="填入图片链接" value="${own.img}" data-imgid="${card.id}">
-      </div>
-    `;
-  })
-  wrap.innerHTML = html;
-  bindCardOperate();
-}
-
-// 卡牌增减、图片输入绑定
-function bindCardOperate() {
-  const minusBtns = document.querySelectorAll(".card-minus");
-  const plusBtns = document.querySelectorAll(".card-plus");
-  const imgInputs = document.querySelectorAll(".card-img-input");
-  minusBtns.forEach(btn=>{
-    btn.onclick = ()=>{
-      const cid = btn.dataset.id;
-      const cardInfo = ALL_CARDS.find(c=>c.id === cid);
-      if(!localData.cardOwn[cid]) localData.cardOwn[cid] = {count:0, img:""};
-      if(localData.cardOwn[cid].count > 0){
-        localData.cardOwn[cid].count--;
-        saveLocalData();
-        addLog(`减少卡牌【${cardInfo.name}】，当前持有${localData.cardOwn[cid].count}张`);
-        refreshAllRender();
-      }
-    }
-  })
-  plusBtns.forEach(btn=>{
-    btn.onclick = ()=>{
-      const cid = btn.dataset.id;
-      const cardInfo = ALL_CARDS.find(c=>c.id === cid);
-      if(!localData.cardOwn[cid]) localData.cardOwn[cid] = {count:0, img:""};
-      localData.cardOwn[cid].count++;
-      saveLocalData();
-      addLog(`增加卡牌【${cardInfo.name}】，当前持有${localData.cardOwn[cid].count}张`);
-      refreshAllRender();
-    }
-  })
-  imgInputs.forEach(input=>{
-    input.oninput = ()=>{
-      const cid = input.dataset.imgid;
-      if(!localData.cardOwn[cid]) localData.cardOwn[cid] = {count:0, img:""};
-      localData.cardOwn[cid].img = input.value;
-      saveLocalData();
-    }
-  })
-}
-
-// ====================== 8. 批量快捷抽数录入 ======================
-function bindBatchDraw() {
-  const batchBtns = document.querySelectorAll(".batch-btn");
-  batchBtns.forEach(btn=>{
-    btn.onclick = ()=>{
-      const pool = btn.dataset.pool;
-      const num = parseInt(btn.dataset.num);
-      localData.drawData[pool] += num;
-      saveLocalData();
-      const poolName = pool === "pool1" ? "夏日池" : "橘暖池";
-      addLog(`批量录入${poolName}+${num}抽，当前${poolName}总抽数${localData.drawData[pool]}`);
-      refreshAllRender();
-    }
-  })
-}
-
-// ====================== 9. 日志渲染 ======================
-function renderLog() {
-  const wrap = document.getElementById("log-list");
-  let html = "";
-  localData.logList.forEach(item=>{
-    html += `<div class="log-item"><div class="log-time">${item.time}</div><div>${item.content}</div></div>`;
-  })
-  wrap.innerHTML = html || "<div style='padding:10px;color:#999;'>暂无操作记录</div>";
-}
-
-// ====================== 10. 数据导入导出、清空绑定 ======================
-function bindDataOperate() {
-  // 导出JSON
-  document.getElementById("export-data").onclick = ()=>{
-    const exportObj = localData;
-    const jsonStr = JSON.stringify(exportObj, null, 2);
-    const blob = new Blob([jsonStr], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "奇妙浆果园抽卡备份_" + new Date().getTime() + ".json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-  // 导入触发文件选择
-  document.getElementById("trigger-import").onclick = ()=>{
-    document.getElementById("import-file").click();
-  }
-  // 读取导入文件
-  document.getElementById("import-file").onchange = (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev)=>{
-      try {
-        const data = JSON.parse(ev.target.result);
-        localData = data;
-        saveLocalData();
-        addLog("导入外部备份数据完成");
-        refreshAllRender();
-        alert("数据导入成功！");
-      } catch(err) {
-        alert("导入失败，文件格式错误，请选择正确备份JSON");
-        console.error(err);
-      }
-    }
-    reader.readAsText(file);
-  }
-  // 清空全部本地缓存
-  document.getElementById("clear-data").onclick = ()=>{
-    if(!confirm("确认清空所有本地数据？抽数、卡牌、日志全部删除，无法恢复，建议先导出备份！")) return;
-    StorageUtil.clearAll();
-    localData = initLocalData();
-    addLog("执行清空全部本地缓存操作");
-    refreshAllRender();
-    alert("本地数据已全部清空");
-  }
-}
-
-// ====================== 11. 全局刷新渲染 ======================
-function refreshAllRender() {
-  renderDashStat();
-  renderCardGrid("pool1-card-grid", POOL1_CARDS);
-  renderCardGrid("pool2-card-grid", POOL2_CARDS);
-  renderCardGrid("gift-grid", GIFT_LIST);
-  renderCardGrid("limit-grid", LIMIT_CARDS);
-  renderCardGrid("award-grid", AWARD_LIST);
-  renderLog();
-}
-
-// ====================== 12. 页面初始化入口 ======================
-window.onload = ()=>{
-  bindTabSwitch();
-  bindBatchDraw();
-  bindDataOperate();
-  refreshAllRender();
-}
-</script>
+<script src="app.js"></script>
 </body>
 </html>
