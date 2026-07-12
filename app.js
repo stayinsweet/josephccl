@@ -2286,10 +2286,7 @@ switchPool('xiari');
 renderPanels();
 // 启动时弹出存储提醒（版本升级或未选"不再提醒"时弹出）
 const NOTICE_VERSION = '1.1'; // 更新此版本号会让弹窗重新弹出
-const NOTICE_UPDATES = [
-  '修复截图识别多图上传的匹配 bug',
-  '优化 OCR 识别策略（合并正则、修复 9SR→SSR 误识）',
-];
+const NOTICE_UPDATES = ['修复截图识别多图上传的匹配 bug'];
 (function showNoticeIfNeeded() {
   const lastDismissed = localStorage.getItem('ccg_notice_version') || '';
   const dismissed = localStorage.getItem('ccg_notice_dismiss') === '1';
