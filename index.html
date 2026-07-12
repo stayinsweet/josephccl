@@ -91,7 +91,12 @@
           <div class="icon">📷</div><div class="text">点击上传截图（支持多选）</div><div class="hint">拍照或从相册批量选择 · 结果自动累加</div>
         </div>
         <div class="upload-preview" id="uploadPreview">
-          <img id="previewImg" src="" alt="预览">
+          <div class="preview-carousel">
+            <button class="preview-nav prev" id="previewPrev" onclick="switchPreview(-1)">‹</button>
+            <img id="previewImg" src="" alt="预览">
+            <button class="preview-nav next" id="previewNext" onclick="switchPreview(1)">›</button>
+            <span class="preview-index" id="previewIndex"></span>
+          </div>
           <div class="ocr-result">
             <div class="ocr-title" id="ocrStatus">🤖 识别到的卡号（点击可剔除误识别）：</div>
             <div class="ocr-loading" id="ocrLoading">

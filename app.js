@@ -212,14 +212,14 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 0;
+const GLOBAL_TOTAL_DRAWS = 57430;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
 let currentTab = 'collection';
 let groupMode = 'type'; // 'rarity' | 'type'
-let ocrCounts = {}; // OCR检测到的每张卡的数量 { pr2: 2, r3: 1 }
-let ocrSelected = {}; // 用户调整后的数量 { pr2: 2, r3: 1 }，0 表示剔除
+let ocrCounts = { xiari: {}, junuan: {} }; // OCR检测到的每张卡的数量（分池）
+let ocrSelected = { xiari: {}, junuan: {} }; // 用户调整后的数量（分池）
 let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
 let modalCard = null;
 // 额外奖励（限时礼 / 宣传礼）用户确认状态
@@ -1132,12 +1132,12 @@ const CN_CARD_PATTERNS = [
   { pattern: /未\s*公\s*开\s*角\s*色\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ur' },
 ];
 
-// 图片预处理：放大+增强对比度
-function preprocessImage(imgData, callback) {
+// 图片预处理：放大 + 灰度增强/二值化（mode: 'gray' | 'binary'）
+function preprocessImage(imgData, callback, mode = 'gray') {
   const img = new Image();
   img.onload = function () {
     const canvas = document.createElement('canvas');
-    const scale = Math.max(2.0, 1500 / img.width);
+    const scale = Math.max(2.5, 2000 / img.width); // 放大到宽度≥2000px
     canvas.width = img.width * scale;
     canvas.height = img.height * scale;
     const ctx = canvas.getContext('2d');
@@ -1147,8 +1147,15 @@ function preprocessImage(imgData, callback) {
     const d = imageData.data;
     for (let i = 0; i < d.length; i += 4) {
       const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      const enhanced = Math.min(255, Math.max(0, (gray - 50) * 2.0));
-      d[i] = d[i + 1] = d[i + 2] = enhanced;
+      if (mode === 'binary') {
+        // 二值化：阈值 128
+        const v = gray >= 128 ? 255 : 0;
+        d[i] = d[i + 1] = d[i + 2] = v;
+      } else {
+        // 灰度增强对比度
+        const enhanced = Math.min(255, Math.max(0, (gray - 50) * 2.0));
+        d[i] = d[i + 1] = d[i + 2] = enhanced;
+      }
     }
     ctx.putImageData(imageData, 0, 0);
     callback(canvas.toDataURL('image/png'));
@@ -1178,7 +1185,7 @@ async function getWorker() {
   });
 
   await w.setParameters({
-    tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+    tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
   });
   tessWorker = w;
   return w;
@@ -1188,16 +1195,31 @@ async function getWorker() {
 function detectPool(text) {
   // 去空格，避免「音乐 卡」之类漏匹配
   const t = text.replace(/\s+/g, '');
-  const xiariTypes = ['日常卡', '音乐卡', '涂鸦卡', '路透卡', '拍立得', '镂空卡', '衣料卡'];
+  const xiariTypes = [
+    '日常卡',
+    '音乐卡',
+    '涂鸦卡',
+    '路透卡',
+    '拍立得',
+    '镂空卡',
+    '衣料卡',
+  ];
   const junuanTypes = ['角色卡', '拼图卡', '月历卡', '工艺卡', '未公开角色卡'];
-  let xiariHits = 0, junuanHits = 0;
+  let xiariHits = 0,
+    junuanHits = 0;
   for (const name of xiariTypes) {
     let i = 0;
-    while ((i = t.indexOf(name, i)) !== -1) { xiariHits++; i += name.length; }
+    while ((i = t.indexOf(name, i)) !== -1) {
+      xiariHits++;
+      i += name.length;
+    }
   }
   for (const name of junuanTypes) {
     let i = 0;
-    while ((i = t.indexOf(name, i)) !== -1) { junuanHits++; i += name.length; }
+    while ((i = t.indexOf(name, i)) !== -1) {
+      junuanHits++;
+      i += name.length;
+    }
   }
   if (xiariHits > junuanHits) return 'xiari';
   if (junuanHits > xiariHits) return 'junuan';
@@ -1210,25 +1232,33 @@ function matchCardCounts(text, words, validIDs) {
   // 策略A：中文卡名 + 数字
   const cntA = {};
   for (const { pattern, cat } of CN_CARD_PATTERNS) {
-    let m; pattern.lastIndex = 0;
+    let m;
+    pattern.lastIndex = 0;
     while ((m = pattern.exec(text)) !== null) {
       const id = cat + parseInt(m[1]);
       if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
     }
   }
   results.push(cntA);
-  // 策略B：英文缩写 + 数字
+  // 策略B：英文缩写 + 数字（数字部分容忍 OCR 把 1→l/I、0→O 的错误）
   const cntB = {};
+  const numCls = '[0-9lIoO]'; // 容忍常见数字误识
+  const fixNum = s =>
+    s.replace(/l/gi, '1').replace(/I/g, '1').replace(/O/gi, '0');
   const enPatterns = [
-    /\b(pr|PR|Pr)\s*(\d{1,2})\b/g, /\b(sr|SR|Sr)\s*(\d{1,2})\b/g,
-    /\b(ssr|SSR|Ssr)\s*(\d{1,2})\b/g, /\b(ur|UR|Ur)\s*(\d{1,2})\b/g,
-    /\b(hr|HR|Hr)\s*(\d{1,2})\b/g, /\b(sp|SP|Sp)\s*(\d{1,2})\b/g,
-    /\b(r|R)\s*(\d{1,2})\b/g,
+    new RegExp(`\\b(pr|PR|Pr)\\s*(${numCls}{1,2})\\b`, 'g'),
+    new RegExp(`\\b(sr|SR|Sr)\\s*(${numCls}{1,2})\\b`, 'g'),
+    new RegExp(`\\b(ssr|SSR|Ssr)\\s*(${numCls}{1,2})\\b`, 'g'),
+    new RegExp(`\\b(ur|UR|Ur)\\s*(${numCls}{1,2})\\b`, 'g'),
+    new RegExp(`\\b(hr|HR|Hr)\\s*(${numCls}{1,2})\\b`, 'g'),
+    new RegExp(`\\b(sp|SP|Sp)\\s*(${numCls}{1,2})\\b`, 'g'),
+    new RegExp(`\\b(r|R)\\s*(${numCls}{1,2})\\b`, 'g'),
   ];
   for (const pat of enPatterns) {
-    let m; pat.lastIndex = 0;
+    let m;
+    pat.lastIndex = 0;
     while ((m = pat.exec(text)) !== null) {
-      const id = m[1].toLowerCase() + parseInt(m[2]);
+      const id = m[1].toLowerCase() + parseInt(fixNum(m[2]));
       if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
     }
   }
@@ -1245,7 +1275,10 @@ function matchCardCounts(text, words, validIDs) {
   results.push(cntC);
   // 策略D：中文宽松匹配
   const cntD = {};
-  const compact = text.replace(/[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g, '');
+  const compact = text.replace(
+    /[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g,
+    '',
+  );
   for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
     if (cnName.length < 2) continue;
     let idx = 0;
@@ -1270,6 +1303,33 @@ function matchCardCounts(text, words, validIDs) {
   return out;
 }
 
+// 预览图翻阅
+let previewImgs = [];
+let previewIdx = 0;
+function showPreview(idx) {
+  previewIdx = idx;
+  const img = document.getElementById('previewImg');
+  const indexEl = document.getElementById('previewIndex');
+  const prevBtn = document.getElementById('previewPrev');
+  const nextBtn = document.getElementById('previewNext');
+  if (previewImgs.length === 0) {
+    img.src = '';
+    if (indexEl) indexEl.textContent = '';
+    if (prevBtn) prevBtn.style.display = 'none';
+    if (nextBtn) nextBtn.style.display = 'none';
+    return;
+  }
+  img.src = previewImgs[idx];
+  if (indexEl) indexEl.textContent = `${idx + 1} / ${previewImgs.length}`;
+  if (prevBtn) prevBtn.style.display = previewImgs.length > 1 ? '' : 'none';
+  if (nextBtn) nextBtn.style.display = previewImgs.length > 1 ? '' : 'none';
+}
+function switchPreview(delta) {
+  if (previewImgs.length === 0) return;
+  let n = (previewIdx + delta + previewImgs.length) % previewImgs.length;
+  showPreview(n);
+}
+
 async function handleScreenshots(event) {
   const files = Array.from(event.target.files);
   if (files.length === 0) return;
@@ -1281,14 +1341,15 @@ async function handleScreenshots(event) {
   document.getElementById('ocrStatus').textContent =
     `🔧 处理 ${files.length} 张截图...`;
   document.getElementById('ocrCount').textContent = '0';
-  ocrCounts = {};
-  ocrSelected = {};
+  previewImgs = [];
+  ocrCounts = { xiari: {}, junuan: {} };
+  ocrSelected = { xiari: {}, junuan: {} };
   ocrExpectedTotal = 0;
 
-  const accumulated = {};
+  const accumulated = { xiari: {}, junuan: {} };
   let grandExpected = 0;
   const allDebug = [];
-  let detectedPool = null; // 自动判断的池（第一张图确定后切换）
+  const detectedPools = new Set(); // 记录所有图判出的池
 
   for (let fi = 0; fi < files.length; fi++) {
     const file = files[fi];
@@ -1301,130 +1362,152 @@ async function handleScreenshots(event) {
       reader.readAsDataURL(file);
     });
 
-    if (fi === 0) document.getElementById('previewImg').src = rawImgData;
+    // 收集预览图，更新翻阅
+    previewImgs.push(rawImgData);
+    showPreview(previewImgs.length - 1);
 
     await new Promise(resolve => {
-      preprocessImage(rawImgData, async processedImgData => {
-        const allTexts = [];
-        const allWords = [];
+      preprocessImage(rawImgData, async grayImgData => {
+        preprocessImage(rawImgData, async binaryImgData => {
+          const allTexts = [];
+          const allWords = [];
 
-        try {
-          const worker = await getWorker();
+          try {
+            const worker = await getWorker();
 
-          // 第1轮：预处理图
-          document.getElementById('ocrStatus').textContent =
-            '🤖 第1轮识别（预处理图）...';
-          const ret1 = await worker.recognize(processedImgData);
-          allTexts.push(ret1.data.text);
-          if (ret1.data.words) allWords.push(...ret1.data.words);
+            // 第1轮：灰度增强图
+            document.getElementById('ocrStatus').textContent =
+              '🤖 第1轮识别（灰度增强）...';
+            const ret1 = await worker.recognize(grayImgData);
+            allTexts.push(ret1.data.text);
+            if (ret1.data.words) allWords.push(...ret1.data.words);
 
-          // 第2轮：原图
-          document.getElementById('ocrStatus').textContent =
-            '🤖 第2轮识别（原图）...';
-          const ret2 = await worker.recognize(rawImgData);
-          allTexts.push(ret2.data.text);
-          if (ret2.data.words) allWords.push(...ret2.data.words);
+            // 第2轮：原图
+            document.getElementById('ocrStatus').textContent =
+              '🤖 第2轮识别（原图）...';
+            const ret2 = await worker.recognize(rawImgData);
+            allTexts.push(ret2.data.text);
+            if (ret2.data.words) allWords.push(...ret2.data.words);
 
-          const fullText = allTexts.join('\n');
-          console.log('=== OCR 原始输出 ===');
-          console.log(fullText);
-          console.log('=== 单词 ===');
-          console.log(
-            allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
-          );
+            // 第3轮：二值化图
+            document.getElementById('ocrStatus').textContent =
+              '🤖 第3轮识别（二值化）...';
+            const ret3 = await worker.recognize(binaryImgData);
+            allTexts.push(ret3.data.text);
+            if (ret3.data.words) allWords.push(...ret3.data.words);
 
-          // 判断本张图属于哪个池（每张都判，取首个能判出的池；判不出则沿用已判出的或当前池）
-          const imgPoolDetected = detectPool(fullText);
-          if (imgPoolDetected) {
-            if (!detectedPool) {
-              detectedPool = imgPoolDetected;
-              if (detectedPool !== currentPool) {
-                switchPool(detectedPool); // 自动切换到识别出的池
-              }
-            } else if (detectedPool !== imgPoolDetected) {
-              // 跨池图：以已判出的池为准，忽略不同池的卡
-            }
-          }
-          const poolForMatch = detectedPool || currentPool;
-          const validIDs = new Set(poolIDs(poolForMatch));
-
-          // 两轮分别匹配，每张卡取两轮中的最大值（避免拼接文本导致重复计数）
-          const cnt1 = matchCardCounts(ret1.data.text, ret1.data.words, validIDs);
-          const cnt2 = matchCardCounts(ret2.data.text, ret2.data.words, validIDs);
-          const strategyResults = [cnt1, cnt2];
-
-          // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
-          let expectedTotal = 0;
-          const prizePattern = /奖品\s*(\d{1,2})/g;
-          let pm;
-          while ((pm = prizePattern.exec(fullText)) !== null) {
-            const n = parseInt(pm[1]);
-            if (n > expectedTotal) expectedTotal = n;
-          }
-          // 也检查 "Prize" 英文写法
-          const prizePatternEN = /prize\s*(\d{1,2})/gi;
-          while ((pm = prizePatternEN.exec(fullText)) !== null) {
-            const n = parseInt(pm[1]);
-            if (n > expectedTotal) expectedTotal = n;
-          }
-          console.log('检测到奖品总数: ' + expectedTotal);
-          ocrExpectedTotal = expectedTotal; // 存为全局变量
-
-          // 合并：每张卡取各策略的最大值
-          const imgCounts = {};
-          for (const id of validIDs) {
-            let maxCnt = 0;
-            for (const sr of strategyResults) {
-              if (sr[id] && sr[id] > maxCnt) maxCnt = sr[id];
-            }
-            if (maxCnt > 0)
-              imgCounts[id] = Math.min(maxCnt, expectedTotal || 10);
-          }
-
-          // 奖品位校验修正
-          const rawTotal = Object.values(imgCounts).reduce((s, c) => s + c, 0);
-          if (expectedTotal > 0 && rawTotal > expectedTotal) {
-            const scale = expectedTotal / rawTotal;
-            for (const id of Object.keys(imgCounts))
-              imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
-            let adjTotal = Object.values(imgCounts).reduce((s, c) => s + c, 0);
-            const sortedIds = Object.keys(imgCounts).sort(
-              (a, b) => imgCounts[b] - imgCounts[a],
+            const fullText = allTexts.join('\n');
+            console.log('=== OCR 原始输出 ===');
+            console.log(fullText);
+            console.log('=== 单词 ===');
+            console.log(
+              allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
             );
-            for (const id of sortedIds) {
-              while (imgCounts[id] > 1 && adjTotal > expectedTotal) {
-                imgCounts[id]--;
-                adjTotal--;
+
+            // 判断本张图属于哪个池（逐图判池，混合上传时各图归各自池）
+            const imgPool = detectPool(fullText) || currentPool;
+            detectedPools.add(imgPool);
+            const validIDs = new Set(poolIDs(imgPool));
+
+            // 三轮分别匹配，每张卡取三轮中的最大值（避免拼接文本导致重复计数）
+            const cnt1 = matchCardCounts(
+              ret1.data.text,
+              ret1.data.words,
+              validIDs,
+            );
+            const cnt2 = matchCardCounts(
+              ret2.data.text,
+              ret2.data.words,
+              validIDs,
+            );
+            const cnt3 = matchCardCounts(
+              ret3.data.text,
+              ret3.data.words,
+              validIDs,
+            );
+            const strategyResults = [cnt1, cnt2, cnt3];
+
+            // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
+            let expectedTotal = 0;
+            const prizePattern = /奖品\s*(\d{1,2})/g;
+            let pm;
+            while ((pm = prizePattern.exec(fullText)) !== null) {
+              const n = parseInt(pm[1]);
+              if (n > expectedTotal) expectedTotal = n;
+            }
+            // 也检查 "Prize" 英文写法
+            const prizePatternEN = /prize\s*(\d{1,2})/gi;
+            while ((pm = prizePatternEN.exec(fullText)) !== null) {
+              const n = parseInt(pm[1]);
+              if (n > expectedTotal) expectedTotal = n;
+            }
+            console.log('检测到奖品总数: ' + expectedTotal);
+            ocrExpectedTotal = expectedTotal; // 存为全局变量
+
+            // 合并：每张卡取各策略的最大值
+            const imgCounts = {};
+            for (const id of validIDs) {
+              let maxCnt = 0;
+              for (const sr of strategyResults) {
+                if (sr[id] && sr[id] > maxCnt) maxCnt = sr[id];
+              }
+              if (maxCnt > 0)
+                imgCounts[id] = Math.min(maxCnt, expectedTotal || 10);
+            }
+
+            // 奖品位校验修正
+            const rawTotal = Object.values(imgCounts).reduce(
+              (s, c) => s + c,
+              0,
+            );
+            if (expectedTotal > 0 && rawTotal > expectedTotal) {
+              const scale = expectedTotal / rawTotal;
+              for (const id of Object.keys(imgCounts))
+                imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
+              let adjTotal = Object.values(imgCounts).reduce(
+                (s, c) => s + c,
+                0,
+              );
+              const sortedIds = Object.keys(imgCounts).sort(
+                (a, b) => imgCounts[b] - imgCounts[a],
+              );
+              for (const id of sortedIds) {
+                while (imgCounts[id] > 1 && adjTotal > expectedTotal) {
+                  imgCounts[id]--;
+                  adjTotal--;
+                }
               }
             }
+
+            // 累加到该图所属池
+            for (const [id, cnt] of Object.entries(imgCounts)) {
+              accumulated[imgPool][id] = (accumulated[imgPool][id] || 0) + cnt;
+            }
+            grandExpected += expectedTotal;
+            allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
+          } catch (err) {
+            console.error(`第${fi + 1}张识别失败:`, err);
           }
 
-          // 累加到全局
-          for (const [id, cnt] of Object.entries(imgCounts)) {
-            accumulated[id] = (accumulated[id] || 0) + cnt;
-          }
-          grandExpected += expectedTotal;
-          allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
-        } catch (err) {
-          console.error(`第${fi + 1}张识别失败:`, err);
-        }
-
-        document.getElementById('ocrLoading').style.display = 'none';
-        resolve();
-      });
-    }); // end preprocessImage + Promise
+          document.getElementById('ocrLoading').style.display = 'none';
+          resolve();
+        }); // end binary preprocessImage callback
+      }); // end gray preprocessImage callback
+    }); // end Promise
   } // end for loop
 
-  // 所有截图处理完毕，设置全局结果
+  // 所有截图处理完毕，设置全局结果（分池）
   ocrCounts = accumulated;
   ocrExpectedTotal = grandExpected;
 
-  ocrSelected = {};
-  for (const [id, cnt] of Object.entries(ocrCounts)) {
-    if (cnt > 0) ocrSelected[id] = cnt;
+  ocrSelected = { xiari: {}, junuan: {} };
+  let finalTotal = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    for (const [id, cnt] of Object.entries(ocrCounts[pool] || {})) {
+      if (cnt > 0) ocrSelected[pool][id] = cnt;
+      finalTotal += cnt;
+    }
   }
-
-  const finalTotal = Object.values(ocrCounts).reduce((s, c) => s + c, 0);
   const debugInfo = allDebug.join(' | ').slice(0, 200);
 
   if (finalTotal === 0) {
@@ -1443,37 +1526,45 @@ function renderOCR() {
 
   let totalSelected = 0;
   let html = '';
-  // 顶部显示所属卡池
-  html += `<div class="ocr-pool-label">${POOLS[currentPool].name}</div>`;
 
-  // 按卡牌类型分组（不含特典）
-  const typeOrder = poolTypes(currentPool).map(t => ({
-    type: t,
-    ids: poolCards(currentPool).filter(c => c.type === t && c.rarity !== 'ex').map(c => c.id),
-  }));
+  // 两池分区展示，只显示有识别到卡的池
+  for (const pool of ['xiari', 'junuan']) {
+    const counts = ocrCounts[pool] || {};
+    const hasCards = Object.values(counts).some(c => c > 0);
+    if (!hasCards) continue;
+    html += `<div class="ocr-pool-label">${POOLS[pool].name}</div>`;
 
-  for (const group of typeOrder) {
-    html += `<div class="ocr-group-title">${group.type}</div>`;
-    html += '<div class="ocr-grid">';
-    for (const id of group.ids) {
-      const detected = ocrCounts[id] || 0;
-      const selected = ocrSelected[id] || 0;
-      totalSelected += selected;
-      const active = detected > 0 || selected > 0;
-      if (active) {
-        html += `<div class="ocr-cell has">
-          <span class="ocr-cell-id">${id.toUpperCase()}</span>
-          <div class="ocr-cell-ctrl">
-            <button class="ocr-adj-btn" onclick="adjustOCR('${id}', -1)">−</button>
-            <span class="ocr-cell-cnt">${selected}</span>
-            <button class="ocr-adj-btn" onclick="adjustOCR('${id}', 1)">+</button>
-          </div>
-        </div>`;
-      } else {
-        html += `<div class="ocr-cell" onclick="adjustOCR('${id}', 1)"><span class="ocr-cell-id">${id.toUpperCase()}</span></div>`;
+    // 按卡牌类型分组（不含特典）
+    const typeOrder = poolTypes(pool).map(t => ({
+      type: t,
+      ids: poolCards(pool)
+        .filter(c => c.type === t && c.rarity !== 'ex')
+        .map(c => c.id),
+    }));
+
+    for (const group of typeOrder) {
+      html += `<div class="ocr-group-title">${group.type}</div>`;
+      html += '<div class="ocr-grid">';
+      for (const id of group.ids) {
+        const detected = counts[id] || 0;
+        const selected = (ocrSelected[pool] && ocrSelected[pool][id]) || 0;
+        totalSelected += selected;
+        const active = detected > 0 || selected > 0;
+        if (active) {
+          html += `<div class="ocr-cell has">
+            <span class="ocr-cell-id">${id.toUpperCase()}</span>
+            <div class="ocr-cell-ctrl">
+              <button class="ocr-adj-btn" onclick="adjustOCR('${pool}','${id}', -1)">−</button>
+              <span class="ocr-cell-cnt">${selected}</span>
+              <button class="ocr-adj-btn" onclick="adjustOCR('${pool}','${id}', 1)">+</button>
+            </div>
+          </div>`;
+        } else {
+          html += `<div class="ocr-cell" onclick="adjustOCR('${pool}','${id}', 1)"><span class="ocr-cell-id">${id.toUpperCase()}</span></div>`;
+        }
       }
+      html += '</div>';
     }
-    html += '</div>';
   }
 
   container.innerHTML = html;
@@ -1497,53 +1588,65 @@ function renderOCR() {
   }
 }
 
-function adjustOCR(id, delta) {
-  const cur = ocrSelected[id] || 0;
+function adjustOCR(pool, id, delta) {
+  if (!ocrSelected[pool]) ocrSelected[pool] = {};
+  const cur = ocrSelected[pool][id] || 0;
   const newVal = Math.max(0, Math.min(10, cur + delta));
   if (newVal === 0) {
-    delete ocrSelected[id];
+    delete ocrSelected[pool][id];
   } else {
-    ocrSelected[id] = newVal;
+    ocrSelected[pool][id] = newVal;
   }
   renderOCR();
 }
 
 function selectAllOCR() {
-  for (const id of poolIDs(currentPool)) {
-    if (id.startsWith('ex')) continue; // 特典不可 OCR
-    ocrSelected[id] = ocrCounts[id] || 0;
+  for (const pool of ['xiari', 'junuan']) {
+    if (!ocrSelected[pool]) ocrSelected[pool] = {};
+    for (const id of poolIDs(pool)) {
+      if (id.startsWith('ex')) continue; // 特典不可 OCR
+      ocrSelected[pool][id] = (ocrCounts[pool] && ocrCounts[pool][id]) || 0;
+    }
   }
   renderOCR();
 }
 function deselectAllOCR() {
-  ocrSelected = {};
+  ocrSelected = { xiari: {}, junuan: {} };
   renderOCR();
 }
 
 function confirmOCR() {
-  const cards = [];
-  for (const [id, cnt] of Object.entries(ocrSelected)) {
-    if (cnt > 0) {
-      for (let i = 0; i < cnt; i++) cards.push(id);
+  let total = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    const sel = ocrSelected[pool] || {};
+    const cards = [];
+    for (const [id, cnt] of Object.entries(sel)) {
+      if (cnt > 0) {
+        for (let i = 0; i < cnt; i++) cards.push(id);
+      }
+    }
+    if (cards.length > 0) {
+      addCardsToPool(pool, cards, 'ocr');
+      total += cards.length;
     }
   }
-  if (cards.length === 0) {
+  if (total === 0) {
     showToast('⚠️ 请先调整每张卡的数量（点 + 增加）');
     return;
   }
-  addCards(cards, 'ocr');
   clearOCR();
-  showToast(`✅ 已添加 ${cards.length} 张卡`);
+  showToast(`✅ 已添加 ${total} 张卡`);
 }
 
 function clearOCR() {
   document.getElementById('uploadPreview').classList.remove('show');
-  document.getElementById('previewImg').src = '';
+  previewImgs = [];
+  showPreview(0);
   document.getElementById('ocrLoading').style.display = 'none';
   document.getElementById('ocrStatus').textContent =
     '🤖 识别到的卡号（点击 ± 调整数量）：';
-  ocrCounts = {};
-  ocrSelected = {};
+  ocrCounts = { xiari: {}, junuan: {} };
+  ocrSelected = { xiari: {}, junuan: {} };
   ocrExpectedTotal = 0;
   document.getElementById('ocrNumbers').innerHTML = '';
   document.getElementById('ocrCount').textContent = '0';
@@ -1758,13 +1861,17 @@ function undoLast() {
 
 // ==================== ADD CARDS ====================
 function addCards(cards, type) {
-  if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
+  addCardsToPool(currentPool, cards, type);
+}
+// 指定池添加（OCR 混合上传时两池分别加）
+function addCardsToPool(pool, cards, type) {
+  if (!cardCounts[pool]) cardCounts[pool] = {};
   for (const id of cards) {
-    cardCounts[currentPool][id] = (cardCounts[currentPool][id] || 0) + 1;
+    cardCounts[pool][id] = (cardCounts[pool][id] || 0) + 1;
   }
   pushHistory({
     time: new Date().toISOString(),
-    pool: currentPool,
+    pool,
     cards,
     type,
   });
@@ -2003,8 +2110,14 @@ function closeFloatDraw(e) {
         const r = ovCards[0].getBoundingClientRect();
         let left = r.right - el.offsetWidth - 4;
         let top = r.top + (r.height - el.offsetHeight) / 2;
-        left = Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, left));
-        top = Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, top));
+        left = Math.max(
+          4,
+          Math.min(window.innerWidth - el.offsetWidth - 4, left),
+        );
+        top = Math.max(
+          4,
+          Math.min(window.innerHeight - el.offsetHeight - 4, top),
+        );
         el.style.left = left + 'px';
         el.style.top = top + 'px';
         el.style.right = 'auto';
