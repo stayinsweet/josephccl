@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 91138;
+const GLOBAL_TOTAL_DRAWS = 101424;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -222,6 +222,9 @@ let ocrCounts = { xiari: {}, junuan: {} }; // OCR检测到的每张卡的数量�
 let ocrSelected = { xiari: {}, junuan: {} }; // 用户调整后的数量（分池）
 let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
 let modalCard = null;
+// 一键消除模式：标记两池卡片「保留」并导出
+let purgeMode = false;
+let purgeSnapshot = null; // 进入模式前的 cardCounts 快照
 // 额外奖励（限时礼 / 宣传礼）用户确认状态
 let extraRewards = { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
 
@@ -1676,6 +1679,98 @@ function clearOCR() {
 }
 
 // ==================== MANUAL INPUT (录入网格) ====================
+// 一键消除模式：切换标记状态
+function togglePurgeMode() {
+  purgeMode = !purgeMode;
+  const selectBtn = document.getElementById('purgeSelectBtn');
+  const exportBtn = document.getElementById('purgeExportBtn');
+  if (purgeMode) {
+    // 进入模式：快照当前 cardCounts
+    purgeSnapshot = JSON.parse(JSON.stringify(cardCounts));
+  } else {
+    // 取消模式：恢复 cardCounts 到快照
+    if (purgeSnapshot) {
+      cardCounts = JSON.parse(JSON.stringify(purgeSnapshot));
+      purgeSnapshot = null;
+      saveData();
+      updateStats();
+      renderPanels();
+    }
+  }
+  if (selectBtn)
+    selectBtn.textContent = purgeMode ? '取消一键消除' : '选择一键消除数据';
+  if (exportBtn) exportBtn.disabled = !purgeMode;
+  renderEntry();
+}
+// 导出一键消除数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
+function exportPurgeData() {
+  if (!purgeMode) return;
+  // 用当前 cardCounts（保留模式下用户修改后的数字）生成 JSON
+  const data = {
+    cardCounts,
+    version: 3,
+    exportedAt: new Date().toISOString(),
+    type: 'purge',
+  };
+  const json = JSON.stringify(data);
+  // 往记录页生成一条 purge 记录
+  history.unshift({
+    time: new Date().toISOString(),
+    pool: currentPool,
+    cards: [],
+    type: 'purge',
+    json,
+  });
+  // 恢复 cardCounts 到进入模式前的快照（模式内修改不污染正常数据）
+  if (purgeSnapshot) {
+    cardCounts = JSON.parse(JSON.stringify(purgeSnapshot));
+    purgeSnapshot = null;
+  }
+  saveData();
+  updateStats();
+  renderPanels();
+  renderHistory();
+  // 自动复制到剪切板
+  copyToClipboard(json, '✅ 已生成记录并复制到剪切板');
+  // 退出标记模式，回到初始状态
+  purgeMode = false;
+  const selectBtn = document.getElementById('purgeSelectBtn');
+  const exportBtn = document.getElementById('purgeExportBtn');
+  if (selectBtn) selectBtn.textContent = '选择一键消除数据';
+  if (exportBtn) exportBtn.disabled = true;
+  renderEntry();
+}
+
+// 复制文本到剪切板（带提示）
+function copyToClipboard(text, successMsg) {
+  const done = () => {
+    if (successMsg) showToast(successMsg);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard
+      .writeText(text)
+      .then(done)
+      .catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    done();
+  } catch (e) {
+    showToast('⚠️ 复制失败，请手动复制');
+  }
+  document.body.removeChild(ta);
+}
+
 // 录入页：双卡池页签 + 分组卡片网格，每卡可加减数量
 function renderEntry() {
   // 渲染卡池页签
@@ -1740,8 +1835,10 @@ function entryCellHTML(card, c) {
     ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
     : `<span>${idText}</span>`;
   const cnt = c[card.id] || 0;
+  const keepBadge = purgeMode ? '<div class="keep-badge">保留</div>' : '';
   return `<div class="card-cell entry-cell ${card.rarity} ${cnt > 0 ? 'has' : 'zero'}" id="ecell-${card.id}">
     <div class="placeholder" data-cid="${idText}">${imgHTML}</div>
+    ${keepBadge}
     <div class="cid">${idText}</div>
     <div class="cname">${card.name}</div>
     <div class="entry-ctrl">
@@ -1941,10 +2038,20 @@ function renderHistory() {
 
   container.innerHTML = groups
     .map(g => {
-      const pn = g.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
-      // 组时间标签：取组内最早时间
       const t = new Date(g.startMs);
       const ts = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+      // 一键消除导出记录：独立展示 JSON + 复制按钮
+      if (g.items[0] && g.items[0].type === 'purge') {
+        const it = g.items[0];
+        const preview =
+          it.json.length > 120 ? it.json.slice(0, 120) + '...' : it.json;
+        return `<div class="history-item purge-item">
+          <div class="history-header"><span class="history-pool">📤 一键消除导出</span><span class="history-time">${ts}</span></div>
+          <div class="purge-json">${preview}</div>
+          <button class="btn btn-sm btn-outline purge-copy" onclick="copyPurgeJson(${history.indexOf(it)})">📋 复制完整数据</button>
+        </div>`;
+      }
+      const pn = g.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
       // 组内各卡净变化：manual 计正、adjust 计负
       const delta = {};
       for (const it of g.items) {
@@ -1973,6 +2080,12 @@ function renderHistory() {
     </div>`;
     })
     .join('');
+}
+// 复制某条 purge 记录的完整 JSON
+function copyPurgeJson(idx) {
+  const it = history[idx];
+  if (!it || !it.json) return;
+  copyToClipboard(it.json, '✅ 已复制到剪切板');
 }
 function clearHistory() {
   if (confirm('确定要清空所有记录吗？（卡牌数量不会丢失）')) {

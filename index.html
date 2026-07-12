@@ -69,6 +69,10 @@
 
     <!-- Tab 2: 录入（截图识别 + 手动输入 子页签） -->
     <div class="tab-page" id="tab-entry">
+      <div class="purge-bar">
+        <button class="purge-btn" id="purgeSelectBtn" onclick="togglePurgeMode()">选择一键消除数据</button>
+        <button class="purge-btn primary" id="purgeExportBtn" onclick="exportPurgeData()" disabled>导出一键消除数据</button>
+      </div>
       <div class="sub-tabs">
         <button class="sub-tab active" data-sub="input" onclick="switchSubTab('input')">🔢 手动输入</button>
         <button class="sub-tab" data-sub="ocr" onclick="switchSubTab('ocr')">📷 截图识别</button>
