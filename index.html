@@ -221,6 +221,25 @@
   </div>
 </div>
 
+<!-- 存储提醒 Modal -->
+<div class="modal-overlay" id="noticeModal" style="display:none;">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title">⚠️ 重要提醒</div>
+    <div class="notice-body">
+      <p>本应用的数据<strong>存储在浏览器本地</strong>，<strong>清除浏览器缓存/数据会丢失全部记录</strong>！</p>
+      <p>💡 建议定期使用右上角功能备份：</p>
+      <ul>
+        <li><strong>导出</strong>：把所有数据生成 JSON，可复制保存到备忘录/文件。</li>
+        <li><strong>导入</strong>：支持上传文件或粘贴 JSON 恢复数据。</li>
+      </ul>
+      <p>换手机或清缓存前，请务必先<strong>导出</strong>备份！</p>
+    </div>
+    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeNotice(false)">我知道了</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="closeNotice(true)">下次不再提醒</button>
+  </div>
+</div>
+
 <!-- 总览 Modal（拥有 / 未拥有 页签） -->
 <div class="modal-overlay" id="overviewModal" style="display:none;" onclick="if(event.target===this)closeOverviewModal()">
   <div class="modal-sheet">

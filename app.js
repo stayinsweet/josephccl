@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 102812;
+const GLOBAL_TOTAL_DRAWS = 109290;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -2261,6 +2261,18 @@ loadData();
 switchTab('collection');
 switchPool('xiari');
 renderPanels();
+// 启动时弹出存储提醒（除非用户选了下次不再提醒）
+if (localStorage.getItem('ccg_notice_dismiss') !== '1') {
+  document.getElementById('noticeModal').style.display = 'flex';
+}
+function closeNotice(dontRemind) {
+  document.getElementById('noticeModal').style.display = 'none';
+  if (dontRemind) {
+    try {
+      localStorage.setItem('ccg_notice_dismiss', '1');
+    } catch (e) {}
+  }
+}
 // 点外部收起分组下拉
 document.addEventListener('click', e => {
   const menu = document.getElementById('groupMenu');
