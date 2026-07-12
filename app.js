@@ -222,7 +222,7 @@ let ocrCounts = { xiari: {}, junuan: {} }; // OCR检测到的每张卡的数量�
 let ocrSelected = { xiari: {}, junuan: {} }; // 用户调整后的数量（分池）
 let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
 let modalCard = null;
-// 一键消除模式：标记两池卡片「保留」并导出
+// 一键保留模式：标记两池卡片「保留」并导出
 let purgeMode = false;
 let purgeSnapshot = null; // 进入模式前的 cardCounts 快照
 // 额外奖励（限时礼 / 宣传礼）用户确认状态
@@ -1679,7 +1679,7 @@ function clearOCR() {
 }
 
 // ==================== MANUAL INPUT (录入网格) ====================
-// 一键消除模式：切换标记状态
+// 一键保留模式：切换标记状态
 function togglePurgeMode() {
   purgeMode = !purgeMode;
   const selectBtn = document.getElementById('purgeSelectBtn');
@@ -1698,11 +1698,11 @@ function togglePurgeMode() {
     }
   }
   if (selectBtn)
-    selectBtn.textContent = purgeMode ? '取消一键消除' : '选择一键消除数据';
+    selectBtn.textContent = purgeMode ? '取消一键保留' : '选择一键保留数据';
   if (exportBtn) exportBtn.disabled = !purgeMode;
   renderEntry();
 }
-// 导出一键消除数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
+// 导出一键保留数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
 function exportPurgeData() {
   if (!purgeMode) return;
   // 用当前 cardCounts（保留模式下用户修改后的数字）生成 JSON
@@ -1736,7 +1736,7 @@ function exportPurgeData() {
   purgeMode = false;
   const selectBtn = document.getElementById('purgeSelectBtn');
   const exportBtn = document.getElementById('purgeExportBtn');
-  if (selectBtn) selectBtn.textContent = '选择一键消除数据';
+  if (selectBtn) selectBtn.textContent = '选择一键保留数据';
   if (exportBtn) exportBtn.disabled = true;
   renderEntry();
 }
@@ -2040,14 +2040,14 @@ function renderHistory() {
     .map(g => {
       const t = new Date(g.startMs);
       const ts = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-      // 含 JSON 的导出记录（全量导出 / 一键消除导出）：独立展示 + 复制按钮
+      // 含 JSON 的导出记录（全量导出 / 一键保留导出）：独立展示 + 复制按钮
       if (
         g.items[0] &&
         (g.items[0].type === 'purge' || g.items[0].type === 'export')
       ) {
         const it = g.items[0];
         const isExport = it.type === 'export';
-        const title = isExport ? '💾 全量数据导出' : '📤 一键消除导出';
+        const title = isExport ? '💾 全量数据导出' : '📤 一键保留导出';
         const preview =
           it.json.length > 120 ? it.json.slice(0, 120) + '...' : it.json;
         return `<div class="history-item purge-item">
