@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 101424;
+const GLOBAL_TOTAL_DRAWS = 102812;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -2040,13 +2040,18 @@ function renderHistory() {
     .map(g => {
       const t = new Date(g.startMs);
       const ts = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-      // 一键消除导出记录：独立展示 JSON + 复制按钮
-      if (g.items[0] && g.items[0].type === 'purge') {
+      // 含 JSON 的导出记录（全量导出 / 一键消除导出）：独立展示 + 复制按钮
+      if (
+        g.items[0] &&
+        (g.items[0].type === 'purge' || g.items[0].type === 'export')
+      ) {
         const it = g.items[0];
+        const isExport = it.type === 'export';
+        const title = isExport ? '💾 全量数据导出' : '📤 一键消除导出';
         const preview =
           it.json.length > 120 ? it.json.slice(0, 120) + '...' : it.json;
         return `<div class="history-item purge-item">
-          <div class="history-header"><span class="history-pool">📤 一键消除导出</span><span class="history-time">${ts}</span></div>
+          <div class="history-header"><span class="history-pool">${title}</span><span class="history-time">${ts}</span></div>
           <div class="purge-json">${preview}</div>
           <button class="btn btn-sm btn-outline purge-copy" onclick="copyPurgeJson(${history.indexOf(it)})">📋 复制完整数据</button>
         </div>`;
@@ -2103,70 +2108,116 @@ function exportData() {
     null,
     2,
   );
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  if (navigator.share) {
-    const file = new File(
-      [json],
-      '抽抽乐备份_' + new Date().toISOString().slice(0, 10) + '.json',
-      { type: 'application/json' },
-    );
-    navigator.share({ files: [file], title: '抽抽乐数据备份' }).catch(() => {
+  // 往记录页生成一条导出记录（含 JSON 字符串，便于复制）
+  history.unshift({
+    time: new Date().toISOString(),
+    pool: currentPool,
+    cards: [],
+    type: 'export',
+    json,
+  });
+  saveData();
+  renderHistory();
+  // 自动复制到剪切板
+  copyToClipboard(json, '💾 已备份并复制到剪切板');
+  // 仍尝试下载文件（部分手机不支持则忽略）
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    if (navigator.share) {
+      const file = new File(
+        [json],
+        '抽抽乐备份_' + new Date().toISOString().slice(0, 10) + '.json',
+        { type: 'application/json' },
+      );
+      navigator.share({ files: [file], title: '抽抽乐数据备份' }).catch(() => {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '抽抽乐备份.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    } else {
       const a = document.createElement('a');
       a.href = url;
       a.download = '抽抽乐备份.json';
       a.click();
       URL.revokeObjectURL(url);
-    });
-  } else {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '抽抽乐备份.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-  showToast('💾 数据已备份');
+    }
+  } catch (e) {}
 }
 
 function importData() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json,application/json';
-  input.onchange = function (e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function (ev) {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (!data.cardCounts) {
-          showToast('⚠️ 无效的备份文件');
-          return;
-        }
-        cardCounts = data.cardCounts || { xiari: {}, junuan: {} };
-        history = data.history || [];
-
-        cardImages = data.cardImages || { xiari: {}, junuan: {} };
-        extraRewards = data.extraRewards || {
-          限时时段: null,
-          宣传达标: false,
-          宣传下单时间: '',
-        };
-        saveData();
-        // 迁移导入的旧数据
-        loadData();
-        updateStats();
-        renderCollection();
-        renderHistory();
-        renderPanels();
-        showToast('📥 数据已导入');
-      } catch (err) {
-        showToast('⚠️ 文件格式错误');
-      }
-    };
-    reader.readAsText(file);
+  // 打开导入弹窗（上传 / 粘贴）
+  switchImportTab('file');
+  document.getElementById('importPasteText').value = '';
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('importModal').style.display = 'flex';
+}
+function switchImportTab(tab) {
+  document
+    .getElementById('importTabFile')
+    .classList.toggle('active', tab === 'file');
+  document
+    .getElementById('importTabPaste')
+    .classList.toggle('active', tab === 'paste');
+  document.getElementById('importFileArea').style.display =
+    tab === 'file' ? '' : 'none';
+  document.getElementById('importPasteArea').style.display =
+    tab === 'paste' ? '' : 'none';
+}
+function closeImportModal() {
+  document.getElementById('importModal').style.display = 'none';
+}
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    if (applyImportData(ev.target.result)) {
+      closeImportModal();
+    }
   };
-  input.click();
+  reader.readAsText(file);
+}
+function confirmImportPaste() {
+  const text = document.getElementById('importPasteText').value.trim();
+  if (!text) {
+    showToast('⚠️ 请先粘贴 JSON 文本');
+    return;
+  }
+  if (applyImportData(text)) {
+    closeImportModal();
+  }
+}
+// 应用导入的 JSON 文本，成功返回 true
+function applyImportData(text) {
+  try {
+    const data = JSON.parse(text);
+    if (!data.cardCounts) {
+      showToast('⚠️ 无效的备份数据');
+      return false;
+    }
+    cardCounts = data.cardCounts || { xiari: {}, junuan: {} };
+    history = data.history || [];
+    cardImages = data.cardImages || { xiari: {}, junuan: {} };
+    extraRewards = data.extraRewards || {
+      限时时段: null,
+      宣传达标: false,
+      宣传下单时间: '',
+    };
+    saveData();
+    loadData(); // 迁移导入的旧数据
+    updateStats();
+    renderCollection();
+    renderHistory();
+    renderPanels();
+    showToast('📥 数据已导入');
+    return true;
+  } catch (err) {
+    showToast('⚠️ 数据格式错误');
+    return false;
+  }
 }
 
 function clearAllData() {

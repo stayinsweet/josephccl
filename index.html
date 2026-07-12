@@ -200,6 +200,27 @@
   </div>
 </div>
 
+<!-- 导入数据 Modal（上传 / 粘贴） -->
+<div class="modal-overlay" id="importModal" style="display:none;" onclick="if(event.target===this)closeImportModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeImportModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title">导入数据</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="sub-tab active" id="importTabFile" onclick="switchImportTab('file')">📁 上传文件</button>
+      <button class="sub-tab" id="importTabPaste" onclick="switchImportTab('paste')">📋 粘贴文本</button>
+    </div>
+    <div id="importFileArea">
+      <button class="btn btn-outline" style="width:100%;" onclick="document.getElementById('importFileInput').click()">选择 JSON 文件</button>
+      <input type="file" id="importFileInput" accept=".json,application/json" style="display:none;" onchange="handleImportFile(event)">
+    </div>
+    <div id="importPasteArea" style="display:none;">
+      <textarea id="importPasteText" class="import-textarea" placeholder="粘贴备份的 JSON 文本..."></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmImportPaste()">✅ 导入粘贴数据</button>
+  </div>
+</div>
+
 <!-- 总览 Modal（拥有 / 未拥有 页签） -->
 <div class="modal-overlay" id="overviewModal" style="display:none;" onclick="if(event.target===this)closeOverviewModal()">
   <div class="modal-sheet">

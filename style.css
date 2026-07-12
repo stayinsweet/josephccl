@@ -297,6 +297,12 @@ html, body {
   width: 100%; padding: 10px; border: 1.5px solid var(--orange-200); border-radius: 10px;
   font-size: 14px; font-family: inherit; background: var(--white); color: var(--brown-900);
 }
+.import-textarea {
+  width: 100%; min-height: 160px; padding: 10px; border: 1.5px solid var(--orange-200); border-radius: 10px;
+  font-size: 12px; font-family: ui-monospace, Menlo, monospace; background: var(--white); color: var(--brown-900);
+  resize: vertical; -webkit-user-select: text; user-select: text;
+}
+.import-textarea:focus { outline: none; border-color: var(--orange-500); }
 
 /* Collection */
 .rarity-section { margin-bottom: 18px; }
