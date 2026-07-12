@@ -1124,37 +1124,49 @@ function openRewardModal(name, source, tier, unlocked) {
 // ==================== SCREENSHOT OCR（中文识别版）====================
 let tessWorker = null;
 
-// 中文卡名 → 稀有度映射（仅保留中文卡牌类型名，不含英文缩写以避免子串误匹配）
-const CN_CAT_MAP = {
-  日常卡: 'r',
-  音乐卡: 'sr',
-  涂鸦卡: 'ssr',
-  路透卡: 'pr',
-  拍立得: 'ur',
-  镂空卡: 'hr',
-  衣料卡: 'hr',
-  角色卡: 'r',
-  拼图卡: 'sr',
-  月历卡: 'ssr',
-  工艺卡: 'sp',
-  未公开角色卡: 'ur',
+// 稀有度 → 中文卡名集合（一个卡名可能对应多个稀有度，如日常卡→r+pr）
+const RARITY_CARDS = {
+  r: ['日常卡', '角色卡'],
+  pr: ['日常卡', '音乐卡', '路透卡', '角色卡'],
+  sr: ['音乐卡', '拼图卡'],
+  ssr: ['涂鸦卡', '月历卡'],
+  ur: ['拍立得', '未公开角色卡'],
+  hr: ['镂空卡', '衣料卡'],
+  sp: ['工艺卡'],
 };
-
-// 中文卡名 + 数字 正则（宽松匹配，允许中间有分隔符）
-const CN_CARD_PATTERNS = [
-  { pattern: /日\s*常\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'r' },
-  { pattern: /音\s*乐\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sr' },
-  { pattern: /涂\s*鸦\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ssr' },
-  { pattern: /路\s*透\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'pr' },
-  { pattern: /拍\s*立\s*得\s*[·.]?\s*(\d{1,2})/g, cat: 'ur' },
-  { pattern: /镂\s*空\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'hr' },
-  { pattern: /衣\s*料\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'hr' },
-  { pattern: /角\s*色\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'r' },
-  { pattern: /拼\s*图\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sr' },
-  { pattern: /月\s*历\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ssr' },
-  { pattern: /工\s*艺\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'sp' },
-  { pattern: /未\s*公\s*开\s*角\s*色\s*卡\s*[·.]?\s*(\d{1,2})/g, cat: 'ur' },
-];
+// 稀有度 → 英文缩写正则片段（含大小写变体）
+const RARITY_LETTERS = {
+  r: 'r|R',
+  pr: 'pr|PR|Pr',
+  sr: 'sr|SR|Sr',
+  ssr: 'ssr|SSR|Ssr',
+  ur: 'ur|UR|Ur',
+  hr: 'hr|HR|Hr',
+  sp: 'sp|SP|Sp',
+};
+// 合并正则：可选中文卡名 + 稀有度字母 + 数字（稀有度由字母决定，不由卡名决定）
+// 数字部分容忍 OCR 把 1→l/I、0→O
+const numCls = '[0-9lIoO]';
+const COMBINED_PATTERNS = Object.entries(RARITY_CARDS)
+  .map(([cat, names]) => {
+    // 卡名正则片段：日\s*常\s*卡 这种允许中间空格
+    const nameAlt = names.map(n => n.split('').join('\\s*')).join('|');
+    // 普通字符串拼接，\\s 转义为正则 \s，\\b 转义为词边界
+    return {
+      pattern: new RegExp(
+        '(?:' +
+          nameAlt +
+          ')?\\s*(?:' +
+          RARITY_LETTERS[cat] +
+          ')\\s*(' +
+          numCls +
+          '{1,2})\\b',
+        'g',
+      ),
+      cat,
+    };
+  })
+  .sort((a, b) => b.cat.length - a.cat.length); // ssr 在 sr 前匹配，避免 SSR1 被 sr 吃掉
 
 // 图片预处理：放大 + 灰度增强/二值化（mode: 'gray' | 'binary'）
 function preprocessImage(imgData, callback, mode = 'gray') {
@@ -1252,41 +1264,44 @@ function detectPool(text) {
 
 // 对单段文本跑 4 策略匹配，返回 {id: count}（每卡取各策略最大值）
 function matchCardCounts(text, words, validIDs) {
+  // 文本归一化：
+  // 1) OCR 常把 SSR 的 S 识成 9（9SR），还原为 SSR
+  // 2) OCR 常把两位数拆开（SSR11→SSR1 1），行内合并「字母+数字+空格+数字」
+  text = text.replace(/9(?=s[r])/gi, 'S');
+  text = text.replace(/^.*$/gm, line => {
+    // 只合并稀有度字母后的「数字 空格 数字」（如 SSR1 1 → SSR11）
+    return line.replace(/([sSpPuUhHrR]{1,3})(\d)\s+(\d)\b/gi, '$1$2$3');
+  });
+  if (words) {
+    words = words.map(w => ({
+      ...w,
+      text: w.text.replace(/9(?=s[r])/gi, 'S'),
+    }));
+  }
   const results = [];
-  // 策略A：中文卡名 + 数字
-  const cntA = {};
-  for (const { pattern, cat } of CN_CARD_PATTERNS) {
+  const fixNum = s =>
+    s.replace(/l/gi, '1').replace(/I/g, '1').replace(/O/gi, '0');
+  // 策略AB：可选中文卡名 + 稀有度字母 + 数字（合并旧A+B，稀有度由字母决定）
+  // 按稀有度长度降序匹配（ssr 在 sr 前），长匹配优先占用区间，短匹配重叠则跳过
+  // 避免 SSR1 被同时匹配为 ssr1 + sr1 + r1
+  const cntAB = {};
+  const used = []; // 已占用的字符区间 [start, end)
+  for (const { pattern, cat } of COMBINED_PATTERNS) {
     let m;
     pattern.lastIndex = 0;
     while ((m = pattern.exec(text)) !== null) {
-      const id = cat + parseInt(m[1]);
-      if (validIDs.has(id)) cntA[id] = (cntA[id] || 0) + 1;
+      const start = m.index;
+      const end = m.index + m[0].length;
+      // 检查是否与已占用区间重叠（仅看稀有度字母+数字部分，卡名不互斥）
+      if (used.some(([s, e]) => start < e && end > s)) continue;
+      const id = cat + parseInt(fixNum(m[1]));
+      if (validIDs.has(id)) {
+        cntAB[id] = (cntAB[id] || 0) + 1;
+        used.push([start, end]);
+      }
     }
   }
-  results.push(cntA);
-  // 策略B：英文缩写 + 数字（数字部分容忍 OCR 把 1→l/I、0→O 的错误）
-  const cntB = {};
-  const numCls = '[0-9lIoO]'; // 容忍常见数字误识
-  const fixNum = s =>
-    s.replace(/l/gi, '1').replace(/I/g, '1').replace(/O/gi, '0');
-  const enPatterns = [
-    new RegExp(`\\b(pr|PR|Pr)\\s*(${numCls}{1,2})\\b`, 'g'),
-    new RegExp(`\\b(sr|SR|Sr)\\s*(${numCls}{1,2})\\b`, 'g'),
-    new RegExp(`\\b(ssr|SSR|Ssr)\\s*(${numCls}{1,2})\\b`, 'g'),
-    new RegExp(`\\b(ur|UR|Ur)\\s*(${numCls}{1,2})\\b`, 'g'),
-    new RegExp(`\\b(hr|HR|Hr)\\s*(${numCls}{1,2})\\b`, 'g'),
-    new RegExp(`\\b(sp|SP|Sp)\\s*(${numCls}{1,2})\\b`, 'g'),
-    new RegExp(`\\b(r|R)\\s*(${numCls}{1,2})\\b`, 'g'),
-  ];
-  for (const pat of enPatterns) {
-    let m;
-    pat.lastIndex = 0;
-    while ((m = pat.exec(text)) !== null) {
-      const id = m[1].toLowerCase() + parseInt(fixNum(m[2]));
-      if (validIDs.has(id)) cntB[id] = (cntB[id] || 0) + 1;
-    }
-  }
-  results.push(cntB);
+  results.push(cntAB);
   // 策略C：单词级（置信度 > 40）
   const cntC = {};
   if (words) {
@@ -1297,14 +1312,22 @@ function matchCardCounts(text, words, validIDs) {
     }
   }
   results.push(cntC);
-  // 策略D：中文宽松匹配
+  // 策略D：中文宽松匹配（仅单稀有度卡名，卡名+直接数字无字母的情况）
+  // 多稀有度卡名（日常卡/音乐卡/角色卡）跳过，避免歧义
   const cntD = {};
   const compact = text.replace(
     /[\s,，.。、·:：\-\+\=\(\)（）\[\]【】<>《》""''""！!？?｀`~@#$%^&*_/|\\]/g,
     '',
   );
-  for (const [cnName, cat] of Object.entries(CN_CAT_MAP)) {
-    if (cnName.length < 2) continue;
+  // 反查：卡名 → 稀有度列表，只取唯一稀有度的卡名
+  const cardToRarities = {};
+  for (const [rarity, names] of Object.entries(RARITY_CARDS)) {
+    for (const n of names)
+      (cardToRarities[n] = cardToRarities[n] || []).push(rarity);
+  }
+  for (const [cnName, rarities] of Object.entries(cardToRarities)) {
+    if (rarities.length !== 1) continue; // 跳过多稀有度卡名
+    const cat = rarities[0];
     let idx = 0;
     while ((idx = compact.indexOf(cnName, idx)) !== -1) {
       const after = compact.slice(idx + cnName.length, idx + cnName.length + 3);
@@ -2261,15 +2284,30 @@ loadData();
 switchTab('collection');
 switchPool('xiari');
 renderPanels();
-// 启动时弹出存储提醒（除非用户选了下次不再提醒）
-if (localStorage.getItem('ccg_notice_dismiss') !== '1') {
-  document.getElementById('noticeModal').style.display = 'flex';
-}
+// 启动时弹出存储提醒（版本升级或未选"不再提醒"时弹出）
+const NOTICE_VERSION = '1.1'; // 更新此版本号会让弹窗重新弹出
+const NOTICE_UPDATES = [
+  '修复截图识别多图上传的匹配 bug',
+  '优化 OCR 识别策略（合并正则、修复 9SR→SSR 误识）',
+];
+(function showNoticeIfNeeded() {
+  const lastDismissed = localStorage.getItem('ccg_notice_version') || '';
+  const dismissed = localStorage.getItem('ccg_notice_dismiss') === '1';
+  // 版本升级 或 未选不再提醒 → 弹出
+  if (lastDismissed !== NOTICE_VERSION || !dismissed) {
+    document.getElementById('noticeVer').textContent = 'v' + NOTICE_VERSION;
+    document.getElementById('noticeUpdateList').innerHTML = NOTICE_UPDATES.map(
+      u => `<li>${u}</li>`,
+    ).join('');
+    document.getElementById('noticeModal').style.display = 'flex';
+  }
+})();
 function closeNotice(dontRemind) {
   document.getElementById('noticeModal').style.display = 'none';
   if (dontRemind) {
     try {
       localStorage.setItem('ccg_notice_dismiss', '1');
+      localStorage.setItem('ccg_notice_version', NOTICE_VERSION);
     } catch (e) {}
   }
 }
