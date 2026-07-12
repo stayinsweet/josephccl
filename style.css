@@ -169,6 +169,10 @@ html, body {
 .stat-card .num.sp-num { color: var(--sp-color); }
 .stat-card .num.ex-num { color: var(--ex-color); }
 .stat-card .lbl { font-size: 11px; color: var(--brown-200); margin-top: 2px; line-height: 1.3; word-break: keep-all; }
+.stat-collect { min-width: 88px; }
+.collect-slash { font-size: 13px; font-weight: 600; color: var(--brown-200); }
+.collect-bar { height: 4px; background: var(--orange-100); border-radius: 2px; overflow: hidden; margin-top: 5px; }
+.collect-bar-fill { height: 100%; background: linear-gradient(90deg, var(--orange-400), var(--orange-600)); border-radius: 2px; transition: width 0.4s; }
 
 /* 通用面板 */
 .panel {

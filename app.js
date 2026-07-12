@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 75007;
+const GLOBAL_TOTAL_DRAWS = 79722;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -422,18 +422,39 @@ function switchSubTab(sub) {
 }
 
 // ==================== STATS ====================
+// 单池已收集去重数（不含 ex）
+function poolCollected(pool) {
+  const c = cardCounts[pool] || {};
+  let n = 0;
+  for (const card of poolCards(pool)) {
+    if (card.rarity === 'ex') continue;
+    if ((c[card.id] || 0) > 0) n++;
+  }
+  return n;
+}
+// 单池普通卡总数（不含 ex）
+function poolCardTotal(pool) {
+  let n = 0;
+  for (const card of poolCards(pool)) {
+    if (card.rarity === 'ex') continue;
+    n++;
+  }
+  return n;
+}
 function updateStats() {
   const c = cardCounts[currentPool] || {};
-  // 两池总抽数
-  let total = 0;
-  for (const pool of ['xiari', 'junuan']) {
-    for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
-  }
+  // 当前池总抽数
+  const total = poolDraws(currentPool);
+  // 当前池已收集进度
+  const collected = poolCollected(currentPool);
+  const poolTotal = poolCardTotal(currentPool);
+  const pct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
 
-  // 渲染统计行：总抽数 + 当前池按分组维度统计
+  // 渲染统计行：总抽数 + 已收集 + 当前池按分组维度统计
   const row = document.getElementById('statsRow');
   if (!row) return;
   let html = `<div class="stat-card"><div class="num orange">${total}</div><div class="lbl">总抽数</div></div>`;
+  html += `<div class="stat-card stat-collect"><div class="num">${collected}<span class="collect-slash">/${poolTotal}</span></div><div class="lbl">已收集</div><div class="collect-bar"><div class="collect-bar-fill" style="width:${pct}%"></div></div></div>`;
 
   if (groupMode === 'rarity') {
     // 按稀有度
