@@ -461,6 +461,15 @@ html, body {
 .ocr-loading { text-align: center; padding: 16px; display: none; }
 @keyframes pulse { 0%,100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
 .ocr-pool-label { font-size: 13px; font-weight: 700; color: var(--orange-600); margin-bottom: 10px; }
+.ocr-warn-chip { display: inline-block; margin: 0 4px 4px 0; padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--danger); background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.3); border-radius: 8px; cursor: pointer; }
+.ocr-warn-chip:active { transform: scale(0.93); }
+.img-edit-cell { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--orange-50); border-radius: 10px; margin-bottom: 6px; }
+.img-edit-preview { margin-bottom: 12px; }
+.img-edit-preview img { width: 100%; border-radius: 10px; max-height: 40vh; object-fit: contain; }
+.img-edit-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.img-edit-id { font-size: 14px; font-weight: 800; color: var(--brown-900); min-width: 40px; text-transform: uppercase; }
+.img-edit-name { font-size: 12px; color: var(--brown-200); flex: 1; }
+.img-edit-cnt { min-width: 20px; text-align: center; font-size: 16px; font-weight: 800; color: var(--orange-600); }
 .ocr-group-title { font-size: 11px; font-weight: 600; color: var(--brown-200); margin: 10px 0 6px; }
 .ocr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
 .ocr-cell {

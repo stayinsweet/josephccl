@@ -112,6 +112,7 @@
               <button class="btn btn-sm btn-outline" onclick="deselectAllOCR()">✕ 清空</button>
               <span id="ocrExpectedHint" style="font-size:11px;color:var(--brown-200);margin-left:auto;"></span>
             </div>
+            <div id="ocrWarnings"></div>
             <div class="ocr-nums" id="ocrNumbers"></div>
           </div>
           <div class="btn-row">
@@ -197,6 +198,19 @@
     <div class="bonus-modal-title" id="extraModalTitle"></div>
     <div id="extraModalBody"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmExtraModal()">✅ 确认</button>
+  </div>
+</div>
+
+<!-- 单图编辑 Modal -->
+<div class="modal-overlay" id="imgEditModal" style="display:none;" onclick="if(event.target===this)document.getElementById('imgEditModal').style.display='none'">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="document.getElementById('imgEditModal').style.display='none'">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="imgEditTitle">识别结果</div>
+    <div class="img-edit-preview"><img id="imgEditImg" src="" alt="截图"></div>
+    <div id="imgEditBody"></div>
+    <div class="img-edit-nav" id="imgEditNav"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmImgEdit()">✅ 确认更新</button>
   </div>
 </div>
 

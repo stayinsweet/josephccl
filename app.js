@@ -201,7 +201,7 @@ function rewardImg(name) {
   return `images/${dir}/${REWARD_IMGS[name] || name}.jpg`;
 }
 
-// 全员满赠档位（全员抽数达标 + 个人双池合计>10抽 才解锁）— 特典卡1-7
+// 全员满赠档位（全员抽数达标 + 个人双池合计>=10抽 才解锁）— 特典卡1-7
 const GLOBAL_BONUS = [
   { draws: 30000, card: '特典卡1' },
   { draws: 60000, card: '特典卡2' },
@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 127084;
+const GLOBAL_TOTAL_DRAWS = 135268;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -221,6 +221,7 @@ let groupMode = 'type'; // 'rarity' | 'type'
 let ocrCounts = { xiari: {}, junuan: {} }; // OCR检测到的每张卡的数量（分池）
 let ocrSelected = { xiari: {}, junuan: {} }; // 用户调整后的数量（分池）
 let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
+let imgResults = []; // 每张图识别明细（全局，供单图编辑用）
 let modalCard = null;
 // 一键保留模式：标记两池卡片「保留」并导出
 let purgeMode = false;
@@ -330,9 +331,9 @@ function personalUnlockedCount() {
   }
   return n;
 }
-// 全员满赠已解锁特典卡数（全员抽数达标 且 个人>10抽 才解锁）
+// 全员满赠已解锁特典卡数（全员抽数达标 且 个人>=10抽 才解锁）
 function globalUnlockedCount() {
-  const personalEligible = totalDraws() > GLOBAL_PERSONAL_MIN;
+  const personalEligible = totalDraws() >= GLOBAL_PERSONAL_MIN;
   let n = 0;
   for (const m of GLOBAL_BONUS) {
     if (GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible) n++;
@@ -497,7 +498,7 @@ function renderRewardPool() {
   const panel = document.getElementById('rewardPool');
   if (!panel) return;
   const total = totalDraws();
-  const personalEligible = total > GLOBAL_PERSONAL_MIN;
+  const personalEligible = total >= GLOBAL_PERSONAL_MIN;
 
   // 个人满赠奖励卡
   const personalCards = [];
@@ -678,7 +679,7 @@ function overviewCards() {
     );
   });
   // 全员满赠
-  const personalEligible = totalDraws() > GLOBAL_PERSONAL_MIN;
+  const personalEligible = totalDraws() >= GLOBAL_PERSONAL_MIN;
   GLOBAL_BONUS.forEach(m => {
     list.push({
       name: m.card,
@@ -775,7 +776,7 @@ function renderBonus() {
   const panel = document.getElementById('bonusPanel');
   if (!panel) return;
   const total = totalDraws();
-  const personalEligible = total > GLOBAL_PERSONAL_MIN;
+  const personalEligible = total >= GLOBAL_PERSONAL_MIN;
   const pUnlocked = personalUnlockedCount();
   const gUnlocked = globalUnlockedCount();
 
@@ -808,10 +809,10 @@ function renderBonus() {
     );
     const blocked = GLOBAL_TOTAL_DRAWS >= gNext.draws && !personalEligible;
     const foot = blocked
-      ? `待个人 > ${GLOBAL_PERSONAL_MIN} 抽`
+      ? `待个人 >= ${GLOBAL_PERSONAL_MIN} 抽`
       : personalEligible
         ? `还差 ${fmtWan(gNext.draws - GLOBAL_TOTAL_DRAWS)}`
-        : `还需个人 > ${GLOBAL_PERSONAL_MIN} 抽`;
+        : `还需个人 >= ${GLOBAL_PERSONAL_MIN} 抽`;
     gCard = `<div class="bn-next">
       <div class="bn-next-head"><span class="bn-next-label">下一档</span><span class="bn-next-draws">${fmtWan(gNext.draws)}抽</span></div>
       <div class="bn-next-reward">🔒 ${gNext.card}</div>
@@ -841,7 +842,7 @@ function renderBonus() {
 
 function openBonusDetail(type) {
   const total = totalDraws();
-  const personalEligible = total > GLOBAL_PERSONAL_MIN;
+  const personalEligible = total >= GLOBAL_PERSONAL_MIN;
   let title, body;
 
   if (type === 'personal') {
@@ -868,7 +869,7 @@ function openBonusDetail(type) {
     title = '全员满赠详情';
     body = `<div class="bm-sub">全员抽数 ${fmtWan(GLOBAL_TOTAL_DRAWS)} · 个人 ${total} 抽${personalEligible ? '' : '（未达 ' + GLOBAL_PERSONAL_MIN + ' 抽门槛）'} · 已解锁 ${globalUnlockedCount()}/${GLOBAL_BONUS.length}</div>`;
     if (!personalEligible) {
-      body += `<div class="ms-hint">⚠️ 全员达标后还需个人双池合计 &gt; ${GLOBAL_PERSONAL_MIN} 抽才有资格解锁</div>`;
+      body += `<div class="ms-hint">⚠️ 全员达标后还需个人双池合计 &gt;= ${GLOBAL_PERSONAL_MIN} 抽才有资格解锁</div>`;
     }
     body += GLOBAL_BONUS.map(m => {
       const globalDone = GLOBAL_TOTAL_DRAWS >= m.draws;
@@ -1393,9 +1394,9 @@ async function handleScreenshots(event) {
   ocrSelected = { xiari: {}, junuan: {} };
   ocrExpectedTotal = 0;
 
-  const accumulated = { xiari: {}, junuan: {} };
   let grandExpected = 0;
   const allDebug = [];
+  imgResults = []; // 每张图识别明细 {idx, pool, counts, detected, expected}（全局，供编辑用）
   const detectedPools = new Set(); // 记录所有图判出的池
 
   for (let fi = 0; fi < files.length; fi++) {
@@ -1526,12 +1527,20 @@ async function handleScreenshots(event) {
               }
             }
 
-            // 累加到该图所属池
-            for (const [id, cnt] of Object.entries(imgCounts)) {
-              accumulated[imgPool][id] = (accumulated[imgPool][id] || 0) + cnt;
-            }
             grandExpected += expectedTotal;
             allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
+            // 记录本张图识别明细（用于异常定位 + 单图编辑）
+            const detectedCnt = Object.values(imgCounts).reduce(
+              (s, c) => s + c,
+              0,
+            );
+            imgResults.push({
+              idx: fi,
+              pool: imgPool,
+              counts: { ...imgCounts },
+              detected: detectedCnt,
+              expected: expectedTotal,
+            });
           } catch (err) {
             console.error(`第${fi + 1}张识别失败:`, err);
           }
@@ -1543,17 +1552,12 @@ async function handleScreenshots(event) {
     }); // end Promise
   } // end for loop
 
-  // 所有截图处理完毕，设置全局结果（分池）
-  ocrCounts = accumulated;
+  // 所有截图处理完毕，从 imgResults 派生总结果
   ocrExpectedTotal = grandExpected;
-
-  ocrSelected = { xiari: {}, junuan: {} };
+  rebuildOcrCounts();
   let finalTotal = 0;
   for (const pool of ['xiari', 'junuan']) {
-    for (const [id, cnt] of Object.entries(ocrCounts[pool] || {})) {
-      if (cnt > 0) ocrSelected[pool][id] = cnt;
-      finalTotal += cnt;
-    }
+    for (const cnt of Object.values(ocrCounts[pool] || {})) finalTotal += cnt;
   }
   const debugInfo = allDebug.join(' | ').slice(0, 200);
 
@@ -1565,7 +1569,129 @@ async function handleScreenshots(event) {
       `✅ 处理 ${files.length} 张截图，奖品位共 <b>${grandExpected || '?'}</b>，识别 <b>${finalTotal}</b> 张卡<br><small style="font-size:10px;">${debugInfo}</small>`;
   }
   document.getElementById('ocrLoading').style.display = 'none';
+  renderOcrWarnings();
   renderOCR();
+}
+
+// 从 imgResults 重新汇总 ocrCounts + ocrSelected
+function rebuildOcrCounts() {
+  const acc = { xiari: {}, junuan: {} };
+  for (const r of imgResults) {
+    for (const [id, cnt] of Object.entries(r.counts || {})) {
+      if (cnt > 0) acc[r.pool][id] = (acc[r.pool][id] || 0) + cnt;
+    }
+  }
+  ocrCounts = acc;
+  ocrSelected = { xiari: {}, junuan: {} };
+  for (const pool of ['xiari', 'junuan']) {
+    for (const [id, cnt] of Object.entries(ocrCounts[pool] || {})) {
+      if (cnt > 0) ocrSelected[pool][id] = cnt;
+    }
+  }
+}
+
+// 刷新异常警告区
+function renderOcrWarnings() {
+  const warnEl = document.getElementById('ocrWarnings');
+  if (!warnEl) return;
+  const abnormals = imgResults.filter(
+    r => r.expected > 0 && r.detected !== r.expected,
+  );
+  if (abnormals.length) {
+    warnEl.innerHTML =
+      '<div style="font-size:11px;color:var(--danger);margin-bottom:8px;">⚠️ 以下截图识别张数与奖位数不一致，点击修改：</div>' +
+      abnormals
+        .map(
+          r =>
+            `<span class="ocr-warn-chip" onclick="openImgEditModal(${r.idx})">第${r.idx + 1}张 ${r.detected}/${r.expected}</span>`,
+        )
+        .join('');
+  } else {
+    warnEl.innerHTML = '';
+  }
+}
+
+// 单图编辑弹窗
+let imgEditIdx = -1;
+function openImgEditModal(idx) {
+  const r = imgResults[idx];
+  if (!r) return;
+  imgEditIdx = idx;
+  updateImgEditModal();
+  document.getElementById('imgEditModal').style.display = 'flex';
+}
+// 刷新单图编辑弹窗内容（标题+图片+卡号列表+异常图切换导航）
+function updateImgEditModal() {
+  const r = imgResults[imgEditIdx];
+  if (!r) return;
+  const pn = r.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
+  document.getElementById('imgEditTitle').innerHTML =
+    `第 ${r.idx + 1} 张识别结果 <span style="font-size:11px;color:var(--brown-200);font-weight:500;">${pn} · 识别 ${r.detected}/${r.expected}</span>`;
+  // 显示该图图片
+  const imgEl = document.getElementById('imgEditImg');
+  if (imgEl) imgEl.src = previewImgs[r.idx] || '';
+  renderImgEditBody();
+  // 异常图切换导航
+  const navEl = document.getElementById('imgEditNav');
+  if (navEl) {
+    const abnormals = imgResults.filter(
+      x => x.expected > 0 && x.detected !== x.expected,
+    );
+    if (abnormals.length > 1) {
+      const curPos = abnormals.findIndex(x => x.idx === r.idx);
+      const prev =
+        abnormals[(curPos - 1 + abnormals.length) % abnormals.length].idx;
+      const next = abnormals[(curPos + 1) % abnormals.length].idx;
+      navEl.innerHTML = `<button class="btn btn-sm btn-outline" onclick="jumpImgEdit(${prev})">‹ 上一异常</button><span style="font-size:11px;color:var(--brown-200);">${curPos + 1}/${abnormals.length}</span><button class="btn btn-sm btn-outline" onclick="jumpImgEdit(${next})">下一异常 ›</button>`;
+    } else {
+      navEl.innerHTML = '';
+    }
+  }
+}
+function jumpImgEdit(idx) {
+  imgEditIdx = idx;
+  updateImgEditModal();
+}
+function renderImgEditBody() {
+  const r = imgResults[imgEditIdx];
+  if (!r) return;
+  const body = document.getElementById('imgEditBody');
+  const entries = Object.entries(r.counts || {}).filter(([, c]) => c > 0);
+  if (entries.length === 0) {
+    body.innerHTML =
+      '<div style="text-align:center;color:var(--brown-200);padding:20px;">该图未识别到卡号</div>';
+    return;
+  }
+  body.innerHTML = entries
+    .map(([id, cnt]) => {
+      const card = cardByID(r.pool, id);
+      const name = card ? card.name : '?';
+      const idText = id.toUpperCase();
+      return `<div class="img-edit-cell">
+      <span class="img-edit-id">${idText}</span>
+      <span class="img-edit-name">${name}</span>
+      <button class="ocr-adj-btn" onclick="adjustImgCard('${id}', -1)">−</button>
+      <span class="img-edit-cnt">${cnt}</span>
+      <button class="ocr-adj-btn" onclick="adjustImgCard('${id}', 1)">+</button>
+    </div>`;
+    })
+    .join('');
+}
+function adjustImgCard(id, delta) {
+  const r = imgResults[imgEditIdx];
+  if (!r) return;
+  const cur = r.counts[id] || 0;
+  r.counts[id] = Math.max(0, cur + delta);
+  if (r.counts[id] === 0) delete r.counts[id];
+  r.detected = Object.values(r.counts).reduce((s, c) => s + c, 0);
+  updateImgEditModal();
+}
+function confirmImgEdit() {
+  document.getElementById('imgEditModal').style.display = 'none';
+  rebuildOcrCounts();
+  renderOcrWarnings();
+  renderOCR();
+  showToast('✅ 已更新总结果');
 }
 
 function renderOCR() {
@@ -1695,7 +1821,10 @@ function clearOCR() {
   ocrCounts = { xiari: {}, junuan: {} };
   ocrSelected = { xiari: {}, junuan: {} };
   ocrExpectedTotal = 0;
+  imgResults = [];
   document.getElementById('ocrNumbers').innerHTML = '';
+  const warnEl = document.getElementById('ocrWarnings');
+  if (warnEl) warnEl.innerHTML = '';
   document.getElementById('ocrCount').textContent = '0';
   const hint = document.getElementById('ocrExpectedHint');
   if (hint) hint.innerHTML = '';
@@ -2345,12 +2474,10 @@ switchTab('collection');
 switchPool('xiari');
 renderPanels();
 // 启动时弹出存储提醒（版本升级或未选"不再提醒"时弹出）
-const NOTICE_VERSION = '1.2'; // 更新此版本号会让弹窗重新弹出
+const NOTICE_VERSION = '1.3'; // 更新此版本号会让弹窗重新弹出
 const NOTICE_UPDATES = [
-  '一键保留模式：导出按钮显示已消除/多出卡数角标',
-  '保留模式下卡片数超原值时红字提示',
-  '导出数据比持有数据多时二次确认',
-  '优化 OCR 识别策略，修复 9SR→SSR 等误识',
+  '修复全员满赠下个人抽数要求的逻辑错误',
+  '新增多图上传识别异常时，异常图修改功能',
 ];
 (function showNoticeIfNeeded() {
   const lastDismissed = localStorage.getItem('ccg_notice_version') || '';
