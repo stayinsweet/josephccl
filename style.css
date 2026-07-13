@@ -394,8 +394,12 @@ html, body {
 }
 .purge-btn:active { transform: scale(0.97); }
 .purge-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.purge-btn.primary { background: linear-gradient(135deg, var(--orange-500), var(--orange-600)); color: white; border-color: transparent; }
+.purge-btn.primary { background: linear-gradient(135deg, var(--orange-500), var(--orange-600)); color: white; border-color: transparent; position: relative; }
 .purge-btn.primary:disabled { background: var(--orange-200); color: white; }
+.purge-badge { display: inline-block; margin-left: 4px; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; vertical-align: middle; }
+.purge-badge:empty { display: none; }
+.purge-badge.up { background: rgba(76,175,80,0.25); color: #fff; }
+.purge-badge.down { background: rgba(224,85,85,0.3); color: #fff; }
 
 /* 保留角标 */
 .keep-badge {
@@ -409,6 +413,7 @@ html, body {
 /* 录入页卡片加减控件 */
 .entry-cell.zero { opacity: 0.55; }
 .entry-ctrl { display: flex; align-items: center; justify-content: center; gap: 2px; margin-top: 4px; }
+.entry-over-hint { display: none; font-size: 9px; color: var(--danger); font-weight: 600; margin-top: 2px; text-align: center; line-height: 1.2; }
 .entry-btn {
   width: 28px; height: 28px; border: none; border-radius: 8px; cursor: pointer;
   background: var(--orange-100); color: var(--orange-600); font-size: 18px; font-weight: 700;

@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 120298;
+const GLOBAL_TOTAL_DRAWS = 127084;
 // 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -1723,11 +1723,52 @@ function togglePurgeMode() {
   if (selectBtn)
     selectBtn.textContent = purgeMode ? '取消一键保留' : '选择一键保留数据';
   if (exportBtn) exportBtn.disabled = !purgeMode;
+  updatePurgeBadge();
   renderEntry();
+}
+// 计算正常模式总张数（快照）与保留模式总张数（当前）的差额，更新角标
+function updatePurgeBadge() {
+  const badge = document.getElementById('purgeBadge');
+  if (!badge) return;
+  if (!purgeMode || !purgeSnapshot) {
+    badge.textContent = '';
+    return;
+  }
+  let normalTotal = 0,
+    purgeTotal = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    for (const cnt of Object.values(purgeSnapshot[pool] || {}))
+      normalTotal += cnt;
+    for (const cnt of Object.values(cardCounts[pool] || {})) purgeTotal += cnt;
+  }
+  const diff = normalTotal - purgeTotal;
+  if (diff > 0) {
+    badge.textContent = '已消除' + diff + '张';
+    badge.className = 'purge-badge up';
+  } else if (diff < 0) {
+    badge.textContent = '多出' + -diff + '张';
+    badge.className = 'purge-badge down';
+  } else {
+    badge.textContent = '';
+  }
 }
 // 导出一键保留数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
 function exportPurgeData() {
   if (!purgeMode) return;
+  // 计算差额：正常模式 - 保留模式
+  let normalTotal = 0,
+    purgeTotal = 0;
+  for (const pool of ['xiari', 'junuan']) {
+    for (const cnt of Object.values(purgeSnapshot[pool] || {}))
+      normalTotal += cnt;
+    for (const cnt of Object.values(cardCounts[pool] || {})) purgeTotal += cnt;
+  }
+  const diff = normalTotal - purgeTotal;
+  // 保留模式比正常多 → 确认
+  if (diff < 0) {
+    if (!confirm('⚠️ 导出数据比持有卡池数据多 ' + -diff + ' 张，确实导出吗？'))
+      return;
+  }
   // 用当前 cardCounts（保留模式下用户修改后的数字）生成 JSON
   const data = {
     cardCounts,
@@ -1869,6 +1910,7 @@ function entryCellHTML(card, c) {
       <input class="entry-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${cnt}" data-id="${card.id}" onfocus="this.select()" onchange="setEntryCount('${card.id}', this.value)">
       <button class="entry-btn" onclick="adjustEntry('${card.id}', 1)">+</button>
     </div>
+    <div class="entry-over-hint" id="eohint-${card.id}"></div>
   </div>`;
 }
 
@@ -1882,6 +1924,22 @@ function updateEntryCell(id) {
   cell.classList.toggle('zero', cnt === 0);
   const input = cell.querySelector('.entry-input');
   if (input && document.activeElement !== input) input.value = cnt;
+  // 保留模式下：当前数 > 原始数（快照）时显示红字提示
+  const hint = cell.querySelector('.entry-over-hint');
+  if (hint) {
+    if (purgeMode && purgeSnapshot) {
+      const orig =
+        (purgeSnapshot[currentPool] && purgeSnapshot[currentPool][id]) || 0;
+      if (cnt > orig) {
+        hint.textContent = '超出原' + (cnt - orig) + '张';
+        hint.style.display = 'block';
+      } else {
+        hint.style.display = 'none';
+      }
+    } else {
+      hint.style.display = 'none';
+    }
+  }
 }
 
 // 局部更新某组收集进度 X/Y
@@ -1937,6 +1995,7 @@ function adjustEntry(id, delta) {
   updateGroupCount(groupKeyOf(card));
   updateStats();
   renderPanels();
+  updatePurgeBadge();
   if (currentTab === 'history') renderHistory();
 }
 
@@ -1967,6 +2026,7 @@ function setEntryCount(id, val) {
   updateGroupCount(groupKeyOf(card));
   updateStats();
   renderPanels();
+  updatePurgeBadge();
   if (currentTab === 'history') renderHistory();
 }
 
@@ -2285,8 +2345,13 @@ switchTab('collection');
 switchPool('xiari');
 renderPanels();
 // 启动时弹出存储提醒（版本升级或未选"不再提醒"时弹出）
-const NOTICE_VERSION = '1.1'; // 更新此版本号会让弹窗重新弹出
-const NOTICE_UPDATES = ['修复截图识别多图上传的匹配 bug'];
+const NOTICE_VERSION = '1.2'; // 更新此版本号会让弹窗重新弹出
+const NOTICE_UPDATES = [
+  '一键保留模式：导出按钮显示已消除/多出卡数角标',
+  '保留模式下卡片数超原值时红字提示',
+  '导出数据比持有数据多时二次确认',
+  '优化 OCR 识别策略，修复 9SR→SSR 等误识',
+];
 (function showNoticeIfNeeded() {
   const lastDismissed = localStorage.getItem('ccg_notice_version') || '';
   const dismissed = localStorage.getItem('ccg_notice_dismiss') === '1';
