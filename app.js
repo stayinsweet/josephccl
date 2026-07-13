@@ -212,8 +212,8 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 135268;
-// 个人满赠门槛：全员达标后还需个人双池合计 > 此值才有资格获取特典卡
+const GLOBAL_TOTAL_DRAWS = 141431;
+// 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
 let currentTab = 'collection';
@@ -1949,19 +1949,23 @@ function copyToClipboard(text, successMsg) {
   }
 }
 function fallbackCopy(text, done) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
+  let ta;
   try {
+    ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
     document.execCommand('copy');
-    done();
+    done && done();
   } catch (e) {
-    showToast('⚠️ 复制失败，请手动复制');
+    // 复制失败不影响主流程（记录页已有 JSON 可手动复制）
+    done && done();
+  } finally {
+    if (ta && ta.parentNode) ta.parentNode.removeChild(ta);
   }
-  document.body.removeChild(ta);
 }
 
 // 录入页：双卡池页签 + 分组卡片网格，每卡可加减数量
@@ -2103,20 +2107,22 @@ function adjustEntry(id, delta) {
   const cur = cardCounts[currentPool][id] || 0;
   const next = Math.max(0, cur + delta);
   cardCounts[currentPool][id] = next;
-  if (delta > 0) {
-    pushHistory({
-      time: new Date().toISOString(),
-      pool: currentPool,
-      cards: [id],
-      type: 'manual',
-    });
-  } else if (delta < 0 && cur > 0) {
-    pushHistory({
-      time: new Date().toISOString(),
-      pool: currentPool,
-      cards: [id],
-      type: 'adjust',
-    });
+  if (!purgeMode) {
+    if (delta > 0) {
+      pushHistory({
+        time: new Date().toISOString(),
+        pool: currentPool,
+        cards: [id],
+        type: 'manual',
+      });
+    } else if (delta < 0 && cur > 0) {
+      pushHistory({
+        time: new Date().toISOString(),
+        pool: currentPool,
+        cards: [id],
+        type: 'adjust',
+      });
+    }
   }
   saveData();
   // 局部更新：只改这一张卡 + 它所在组的计数，不重建整网格
@@ -2141,15 +2147,17 @@ function setEntryCount(id, val) {
     return;
   } // 无变化
   cardCounts[currentPool][id] = next;
-  const type = next > cur ? 'manual' : 'adjust';
-  const diff = Math.abs(next - cur);
-  const cards = Array(diff).fill(id);
-  pushHistory({
-    time: new Date().toISOString(),
-    pool: currentPool,
-    cards,
-    type,
-  });
+  if (!purgeMode) {
+    const type = next > cur ? 'manual' : 'adjust';
+    const diff = Math.abs(next - cur);
+    const cards = Array(diff).fill(id);
+    pushHistory({
+      time: new Date().toISOString(),
+      pool: currentPool,
+      cards,
+      type,
+    });
+  }
   saveData();
   updateEntryCell(id);
   updateGroupCount(groupKeyOf(card));
@@ -2289,7 +2297,7 @@ function renderHistory() {
       const label = g.isManual
         ? '🂡手动'
         : g.items[0].type === 'ocr'
-          ? '📸截图'
+          ? `📸截图 ${g.items.reduce((s, it) => s + it.cards.length, 0)}张`
           : '🔟十连';
       return `<div class="history-item">
       <div class="history-header"><span class="history-pool">${pn} · ${label}</span><span class="history-time">${ts}</span></div>
@@ -2330,13 +2338,17 @@ function exportData() {
   });
   saveData();
   renderHistory();
-  // 自动复制到剪切板
-  copyToClipboard(json, '💾 已备份并复制到剪切板');
-  // 仍尝试下载文件（部分手机不支持则忽略）
+  // 先尝试下载文件（部分手机不支持则忽略），再做剪切板（避免剪切板操作打断下载）
   try {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    if (navigator.share) {
+    if (
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({
+        files: [new File([json], 'x.json', { type: 'application/json' })],
+      })
+    ) {
       const file = new File(
         [json],
         '抽抽乐备份_' + new Date().toISOString().slice(0, 10) + '.json',
@@ -2357,6 +2369,8 @@ function exportData() {
       URL.revokeObjectURL(url);
     }
   } catch (e) {}
+  // 再复制到剪切板（延迟执行，避免与下载冲突）
+  setTimeout(() => copyToClipboard(json, '💾 已备份并复制到剪切板'), 100);
 }
 
 function importData() {

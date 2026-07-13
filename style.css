@@ -200,12 +200,20 @@ html, body {
 /* 总统计 */
 .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .overview-grid .ov-card:first-child { grid-column: 1 / -1; }
-.ov-card { background: var(--orange-50); border-radius: 12px; padding: 12px; }
+.ov-card { background: var(--orange-50); border-radius: 12px; padding: 12px; min-width: 0; }
 .ov-label { font-size: 11px; color: var(--brown-200); margin-bottom: 4px; }
 .ov-num { font-size: 26px; font-weight: 800; color: var(--brown-900); line-height: 1.1; }
 .ov-num.orange { color: var(--orange-600); }
 .ov-slash { font-size: 14px; font-weight: 600; color: var(--brown-200); }
 .ov-bar-wrap { height: 6px; background: var(--orange-100); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+@media (max-width: 380px) {
+  .overview-grid { gap: 6px; }
+  .ov-card { padding: 10px 8px; }
+  .ov-num { font-size: 22px; }
+  .ov-slash { font-size: 12px; }
+  .ov-label { font-size: 10px; }
+  .ov-note { font-size: 8px; }
+}
 .ov-bar { height: 100%; background: linear-gradient(90deg, var(--orange-400),var(--orange-600)); border-radius: 3px; transition: width 0.5s; }
 .ov-bar.reward { background: linear-gradient(90deg, var(--pr-color), var(--sp-color)); }
 .ov-pct { font-size: 10px; color: var(--brown-200); margin-top: 3px; text-align: right; }
@@ -225,8 +233,17 @@ html, body {
 
 /* 满赠同行卡片（个人 + 全员） */
 .bn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.bn-cell { background: var(--orange-50); border-radius: 12px; padding: 10px; }
+.bn-cell { background: var(--orange-50); border-radius: 12px; padding: 10px; min-width: 0; }
 .bn-cell-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+@media (max-width: 380px) {
+  .bn-grid { gap: 6px; }
+  .bn-cell { padding: 8px 6px; }
+  .bn-cell-head { font-size: 12px; }
+  .bn-cell-sub { font-size: 9px; }
+  .bn-next-label { font-size: 9px; }
+  .bn-next-draws { font-size: 12px; }
+  .bn-next-reward { font-size: 11px; }
+}
 .bn-detail-btn {
   border: none; background: var(--white); color: var(--orange-600); font-size: 11px; font-weight: 700;
   padding: 3px 9px; border-radius: 8px; cursor: pointer; font-family: inherit;
@@ -265,6 +282,12 @@ html, body {
 .reward-group-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
 .reward-group-sub { font-size: 11px; font-weight: 600; color: var(--orange-600); }
 .reward-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 380px) {
+  .reward-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .reward-name { font-size: 10px; }
+  .reward-tier { font-size: 8px; }
+  .reward-ph { font-size: 18px; }
+}
 .reward-cell {
   background: var(--orange-50); border-radius: 10px; padding: 8px 4px; text-align: center;
   border: 2px solid transparent; transition: all 0.15s; cursor: pointer;
@@ -616,4 +639,20 @@ html, body {
 @keyframes floatPulse {
   0%, 100% { transform: scale(1); box-shadow: 0 4px 14px rgba(240,120,48,0.45); }
   50% { transform: scale(1.08); box-shadow: 0 6px 20px rgba(240,120,48,0.6); }
+}
+
+/* 小屏手机适配（≤380px） */
+@media (max-width: 380px) {
+  .tab-page { padding: 8px 10px 0; }
+  .card-grid { gap: 6px; }
+  .card-cell { padding: 4px; }
+  .card-cell .cid { font-size: 10px; }
+  .card-cell .cname { font-size: 9px; }
+  .entry-grid .entry-cell { width: 88px; }
+  .ocr-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .panel { padding: 12px 10px; }
+  .pool-section { padding: 4px 10px 12px; }
+  .header h1 { font-size: 15px; }
+  .header-subtitle { font-size: 10px; }
+  .header-btn { padding: 5px 9px; font-size: 11px; }
 }
