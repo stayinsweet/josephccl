@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 141431;
+const GLOBAL_TOTAL_DRAWS = 150410;
 // 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -2369,8 +2369,7 @@ function exportData() {
       URL.revokeObjectURL(url);
     }
   } catch (e) {}
-  // 再复制到剪切板（延迟执行，避免与下载冲突）
-  setTimeout(() => copyToClipboard(json, '💾 已备份并复制到剪切板'), 100);
+  showToast('💾 数据已备份');
 }
 
 function importData() {
