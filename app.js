@@ -323,14 +323,15 @@ function personalTierUnlocked(m) {
   const val = m.pool ? poolDraws(m.pool) : totalDraws();
   return val >= m.draws;
 }
-// 个人满赠已解锁奖励卡数
+// 个人满赠已解锁奖励卡数（按「卡位」计：叠加档位如许愿卡只算1个卡位，
+// 实际张数 ×N 仅在卡片上展示，不计入进度计数）
 function personalUnlockedCount() {
   let n = 0;
   for (const m of PERSONAL_BONUS) {
     if (m.stack) {
-      // 叠加档位：按抽数倍数计（如许愿卡每300抽1张）
+      // 叠加档位：达到 1 倍即视为该卡位解锁，只计 1 张
       const val = m.pool ? poolDraws(m.pool) : totalDraws();
-      n += Math.floor(val / m.draws) * m.rewards.length;
+      if (Math.floor(val / m.draws) > 0) n += m.rewards.length;
     } else if (personalTierUnlocked(m)) {
       n += m.rewards.length;
     }
