@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 154419;
+const GLOBAL_TOTAL_DRAWS = 157454;
 // 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -1893,7 +1893,10 @@ function applyPurgeQuick() {
   const inputEl = document.getElementById('purgeQuickInput');
   if (!inputEl) return;
   let n = parseInt(inputEl.value);
-  if (isNaN(n) || n < 0) { showToast('⚠️ 请输入有效数字'); return; }
+  if (isNaN(n) || n < 0) {
+    showToast('⚠️ 请输入有效数字');
+    return;
+  }
   if (n > 99) n = 99;
   for (const pool of ['xiari', 'junuan']) {
     if (!cardCounts[pool]) cardCounts[pool] = {};
@@ -1938,7 +1941,7 @@ function updatePurgeBadge() {
   }
 }
 // 导出一键保留数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
-function exportPurgeData() {
+async function exportPurgeData() {
   if (!purgeMode) return;
   // 计算差额：正常模式 - 保留模式
   let normalTotal = 0,
@@ -1951,9 +1954,17 @@ function exportPurgeData() {
   const diff = normalTotal - purgeTotal;
   // 保留模式比正常多 → 确认
   if (diff < 0) {
-    if (!confirm('⚠️ 导出数据比持有卡池数据多 ' + -diff + ' 张，确实导出吗？'))
-      return;
+    const ok = await showConfirmModal({
+      title: '⚠️ 提示',
+      body: `导出数据比持有卡池数据多 ${-diff} 张，确实导出吗？`,
+      buttons: [
+        { text: '取消', type: 'outline', value: false },
+        { text: '确定导出', type: 'primary', value: true },
+      ],
+    });
+    if (!ok) return;
   }
+  // 默认不覆盖：导出后恢复原始数据
   // 用当前 cardCounts（保留模式下用户修改后的数字）生成 JSON
   const data = {
     cardCounts,
@@ -1970,7 +1981,7 @@ function exportPurgeData() {
     type: 'purge',
     json,
   });
-  // 恢复 cardCounts 到进入模式前的快照（模式内修改不污染正常数据）
+  // 默认不覆盖：恢复原始数据
   if (purgeSnapshot) {
     cardCounts = JSON.parse(JSON.stringify(purgeSnapshot));
     purgeSnapshot = null;
@@ -1981,12 +1992,21 @@ function exportPurgeData() {
   renderHistory();
   // 自动复制到剪切板
   copyToClipboard(json, '✅ 已生成记录并复制到剪切板');
-  // 退出标记模式，回到初始状态
+  // 退出标记模式，回到初始状态（隐藏角标、快捷操作区）
+  exitPurgeMode();
+}
+
+// 退出保留模式，重置所有 UI 状态
+function exitPurgeMode() {
   purgeMode = false;
   const selectBtn = document.getElementById('purgeSelectBtn');
   const exportBtn = document.getElementById('purgeExportBtn');
+  const quickEl = document.getElementById('purgeQuick');
+  const badge = document.getElementById('purgeBadge');
   if (selectBtn) selectBtn.textContent = '选择一键保留数据';
   if (exportBtn) exportBtn.disabled = true;
+  if (quickEl) quickEl.style.display = 'none';
+  if (badge) badge.textContent = '';
   renderEntry();
 }
 
@@ -2326,10 +2346,17 @@ function renderHistory() {
         const title = isExport ? '💾 全量数据导出' : '📤 一键保留导出';
         const preview =
           it.json.length > 120 ? it.json.slice(0, 120) + '...' : it.json;
+        const applyBtn =
+          it.type === 'purge'
+            ? `<button class="btn btn-sm btn-outline purge-apply" onclick="viewPurgeCollection(${history.indexOf(it)})">📖 查看保留图鉴</button>`
+            : '';
         return `<div class="history-item purge-item">
           <div class="history-header"><span class="history-pool">${title}</span><span class="history-time">${ts}</span></div>
           <div class="purge-json">${preview}</div>
-          <button class="btn btn-sm btn-outline purge-copy" onclick="copyPurgeJson(${history.indexOf(it)})">📋 复制完整数据</button>
+          <div class="purge-actions">
+            <button class="btn btn-sm btn-outline purge-copy" onclick="copyPurgeJson(${history.indexOf(it)})">📋 复制完整数据</button>
+            ${applyBtn}
+          </div>
         </div>`;
       }
       const pn = g.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
@@ -2368,8 +2395,105 @@ function copyPurgeJson(idx) {
   if (!it || !it.json) return;
   copyToClipboard(it.json, '✅ 已复制到剪切板');
 }
-function clearHistory() {
-  if (confirm('确定要清空所有记录吗？（卡牌数量不会丢失）')) {
+// 查看保留图鉴：弹窗展示该 purge 记录的两池卡牌及张数
+function viewPurgeCollection(idx) {
+  const it = history[idx];
+  if (!it || !it.json) return;
+  try {
+    const data = JSON.parse(it.json);
+    const counts = data.cardCounts || {};
+    let html = '';
+    const poolTotals = { xiari: 0, junuan: 0 };
+    for (const pool of ['xiari', 'junuan']) {
+      const c = counts[pool] || {};
+      const poolTotal = Object.values(c).reduce((s, n) => s + n, 0);
+      poolTotals[pool] = poolTotal;
+      html += `<div class="purge-view-pool">${POOLS[pool].name}（${poolTotal}张）</div>`;
+      if (poolTotal === 0) {
+        html +=
+          '<div style="font-size:12px;color:var(--brown-200);padding:8px 0;">无保留卡牌</div>';
+        continue;
+      }
+      // 按卡牌类型分组
+      for (const t of poolTypes(pool)) {
+        const typeCards = poolCards(pool).filter(
+          card => card.type === t && (c[card.id] || 0) > 0,
+        );
+        if (typeCards.length === 0) continue;
+        html += `<div class="purge-view-type">${t}</div>`;
+        html += '<div class="purge-view-grid">';
+        for (const card of typeCards) {
+          const cnt = c[card.id] || 0;
+          if (cnt === 0) continue;
+          html += `<div class="purge-view-cell ${card.rarity}">
+            <div class="purge-view-img"><img src="${card.img}" alt="${card.id}"></div>
+            <div class="purge-view-cnt">×${cnt}</div>
+          </div>`;
+        }
+        html += '</div>';
+      }
+    }
+    // 已获得奖励卡牌：直接用当前实时抽数/确认状态计算（查看历史保留图鉴时也是最新）
+    const liveTotal = totalDraws();
+    const personalEligible = liveTotal >= GLOBAL_PERSONAL_MIN;
+    const rewardItems = [];
+    PERSONAL_BONUS.forEach(m => {
+      const val = m.pool ? poolDraws(m.pool) : liveTotal;
+      if (m.stack) {
+        const cnt = Math.floor(val / m.draws);
+        if (cnt > 0)
+          m.rewards.forEach(name =>
+            rewardItems.push({ displayName: `${name} ×${cnt}`, imgName: name }),
+          );
+      } else if (val >= m.draws) {
+        m.rewards.forEach(name =>
+          rewardItems.push({ displayName: name, imgName: name }),
+        );
+      }
+    });
+    GLOBAL_BONUS.forEach(m => {
+      if (GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible)
+        rewardItems.push({ displayName: m.card, imgName: m.card });
+    });
+    ['限时卡1', '限时卡2', '限时卡3'].forEach(name => {
+      if (limitedUnlocked(name))
+        rewardItems.push({ displayName: name, imgName: name });
+    });
+    if (promoUnlocked())
+      rewardItems.push({ displayName: '宣传卡', imgName: '宣传卡' });
+
+    if (rewardItems.length) {
+      html += `<div class="purge-view-pool">🎁 已获得奖励卡牌（${rewardItems.length} 张）</div>`;
+      html += '<div class="purge-view-grid">';
+      for (const r of rewardItems) {
+        html += `<div class="purge-view-cell">
+          <div class="purge-view-img"><img src="${rewardImg(r.imgName)}" alt="${r.displayName}" onerror="this.style.display='none'"></div>
+          <div class="purge-view-name">${r.displayName}</div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    if (!html)
+      html =
+        '<div style="text-align:center;color:var(--brown-200);padding:30px;">无卡牌数据</div>';
+    document.getElementById('bonusModalTitle').innerHTML =
+      `📖 保留图鉴 <span style="font-size:12px;color:var(--brown-200);font-weight:500;">夏日池${poolTotals.xiari}张，橘暖池${poolTotals.junuan}张，奖励卡${rewardItems.length}张</span>`;
+    document.getElementById('bonusModalBody').innerHTML = html;
+    document.getElementById('bonusModal').style.display = 'flex';
+  } catch (e) {
+    showToast('⚠️ 数据解析失败');
+  }
+}
+async function clearHistory() {
+  const ok = await showConfirmModal({
+    title: '清空记录',
+    body: '确定要清空所有记录吗？（卡牌数量不会丢失）',
+    buttons: [
+      { text: '取消', type: 'outline', value: false },
+      { text: '清空', type: 'primary', value: true },
+    ],
+  });
+  if (ok) {
     history = [];
     saveData();
     renderHistory();
@@ -2501,13 +2625,16 @@ function applyImportData(text) {
   }
 }
 
-function clearAllData() {
-  if (
-    !confirm(
-      '⚠️ 确定要清空所有数据吗？（包括卡牌数量、记录、卡图）\n\n此操作不可恢复！建议先备份。',
-    )
-  )
-    return;
+async function clearAllData() {
+  const ok = await showConfirmModal({
+    title: '⚠️ 清空所有数据',
+    body: '确定要清空所有数据吗？（包括卡牌数量、记录、卡图）<br><br><strong style="color:var(--danger);">此操作不可恢复！建议先备份。</strong>',
+    buttons: [
+      { text: '取消', type: 'outline', value: false },
+      { text: '清空', type: 'primary', value: true },
+    ],
+  });
+  if (!ok) return;
   cardCounts = { xiari: {}, junuan: {} };
   history = [];
   cardImages = { xiari: {}, junuan: {} };
@@ -2521,6 +2648,42 @@ function clearAllData() {
 }
 
 // ==================== TOAST ====================
+// 通用确认弹窗（替代系统 confirm）
+// opts: { title, body, buttons: [{text, type, value}] }
+// 返回 Promise，resolve 用户点击的 value
+let _confirmResolve = null;
+function showConfirmModal(opts) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirmTitle').textContent = opts.title || '提示';
+    document.getElementById('confirmBody').innerHTML = opts.body || '';
+    const actions = document.getElementById('confirmActions');
+    const btns = opts.buttons || [
+      { text: '确定', type: 'primary', value: true },
+    ];
+    actions.innerHTML = btns
+      .map(
+        (b, i) =>
+          `<button class="btn ${b.type === 'primary' ? 'btn-primary' : 'btn-outline'}" style="flex:1;" onclick="closeConfirmModal(${i})">${b.text}</button>`,
+      )
+      .join('');
+    // 存按钮值供 closeConfirmModal 取
+    actions._btnValues = btns.map(b => b.value);
+    document.getElementById('confirmModal').style.display = 'flex';
+  });
+}
+function closeConfirmModal(btnIdx) {
+  document.getElementById('confirmModal').style.display = 'none';
+  if (_confirmResolve) {
+    const val =
+      btnIdx >= 0
+        ? document.getElementById('confirmActions')._btnValues[btnIdx]
+        : null;
+    _confirmResolve(val);
+    _confirmResolve = null;
+  }
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;

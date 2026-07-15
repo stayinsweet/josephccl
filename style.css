@@ -77,7 +77,7 @@ html, body {
 
 .btn {
   padding: 10px 16px; border: none; border-radius: 12px; font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: all 0.15s; font-family: inherit; display: flex; align-items: center; gap: 4px;
+  cursor: pointer; transition: all 0.15s; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 4px;
 }
 .btn:active { transform: scale(0.95); }
 .btn-primary { background: linear-gradient(135deg, var(--orange-500),var(--orange-600)); color: white; box-shadow: 0 3px 12px rgba(240,120,48,0.3); }
@@ -275,6 +275,8 @@ html, body {
 .notice-update-ver { font-size: 11px; font-weight: 600; color: var(--orange-600); margin-left: 4px; }
 .notice-update-list { margin: 0 0 0 18px; padding: 0; }
 .notice-update-list li { font-size: 12px; color: var(--brown-800); line-height: 1.6; margin-bottom: 3px; }
+.confirm-body { font-size: 14px; color: var(--brown-800); line-height: 1.7; margin-bottom: 16px; text-align: center; }
+.confirm-actions { display: flex; gap: 10px; }
 
 /* 奖励卡池 */
 .reward-group { margin-bottom: 14px; }
@@ -526,7 +528,17 @@ html, body {
 .history-item { background: var(--white); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
 .purge-item { border: 1.5px solid var(--orange-300); }
 .purge-json { font-size: 10px; color: var(--brown-200); background: var(--orange-50); border-radius: 8px; padding: 8px 10px; margin: 8px 0; word-break: break-all; line-height: 1.5; font-family: ui-monospace, Menlo, monospace; max-height: 80px; overflow: hidden; }
-.purge-copy { margin-top: 4px; }
+.purge-actions { display: flex; gap: 8px; margin-top: 4px; }
+.purge-actions .btn { flex: 1; }
+.purge-view-pool { font-size: 14px; font-weight: 700; color: var(--orange-600); margin: 12px 0 6px; }
+.purge-view-type { font-size: 11px; font-weight: 600; color: var(--brown-200); margin: 8px 0 4px; }
+.purge-view-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.purge-view-cell { position: relative; border-radius: 8px; overflow: hidden; }
+.purge-view-img { width: 100%; aspect-ratio: 0.72; border-radius: 6px; overflow: hidden; }
+.purge-view-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.purge-view-cnt { position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+.purge-view-name { font-size: 10px; font-weight: 700; color: var(--brown-900); margin-top: 3px; text-align: center; line-height: 1.2; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 380px) { .purge-view-grid { grid-template-columns: repeat(3, 1fr); } }
 .history-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
 .history-pool { font-size: 13px; font-weight: 600; color: var(--orange-600); }
 .history-time { font-size: 12px; color: var(--brown-200); }

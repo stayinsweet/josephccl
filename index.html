@@ -267,6 +267,16 @@
   </div>
 </div>
 
+<!-- 通用确认弹窗 -->
+<div class="modal-overlay" id="confirmModal" style="display:none;" onclick="if(event.target===this)closeConfirmModal(false)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="confirmTitle">提示</div>
+    <div class="confirm-body" id="confirmBody"></div>
+    <div class="confirm-actions" id="confirmActions"></div>
+  </div>
+</div>
+
 <!-- 总览 Modal（拥有 / 未拥有 页签） -->
 <div class="modal-overlay" id="overviewModal" style="display:none;" onclick="if(event.target===this)closeOverviewModal()">
   <div class="modal-sheet">
