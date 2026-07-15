@@ -155,7 +155,7 @@ const PERSONAL_BONUS = [
   { draws: 210, rewards: ['卡套'] },
   { draws: 240, rewards: ['仿真拍立得1'] },
   { draws: 270, rewards: ['仿真拍立得2'] },
-  { draws: 300, rewards: ['许愿卡'] },
+  { draws: 300, rewards: ['许愿卡'], note: '可许愿三张，可叠加', stack: true },
 ];
 const PERSONAL_BONUS_TOTAL = 18; // TR1+TR2+TR5+TR6 等
 
@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 150410;
+const GLOBAL_TOTAL_DRAWS = 154419;
 // 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -327,9 +327,19 @@ function personalTierUnlocked(m) {
 function personalUnlockedCount() {
   let n = 0;
   for (const m of PERSONAL_BONUS) {
-    if (personalTierUnlocked(m)) n += m.rewards.length;
+    if (m.stack) {
+      // 叠加档位：按抽数倍数计（如许愿卡每300抽1张）
+      const val = m.pool ? poolDraws(m.pool) : totalDraws();
+      n += Math.floor(val / m.draws) * m.rewards.length;
+    } else if (personalTierUnlocked(m)) {
+      n += m.rewards.length;
+    }
   }
   return n;
+}
+// 许愿卡叠加数量（已解锁几张）
+function wishCardCount() {
+  return Math.floor(totalDraws() / 300);
 }
 // 全员满赠已解锁特典卡数（全员抽数达标 且 个人>=10抽 才解锁）
 function globalUnlockedCount() {
@@ -507,14 +517,25 @@ function renderRewardPool() {
     const tierLabel = m.pool
       ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}池${m.draws}抽`
       : `${m.draws}抽`;
-    m.rewards.forEach(name =>
-      personalCards.push({
-        name,
-        source: '个人满赠',
-        tier: tierLabel,
-        unlocked,
-      }),
-    );
+    m.rewards.forEach(name => {
+      // 许愿卡叠加：显示已获张数 + 备注
+      if (m.stack) {
+        const cnt = Math.floor(total / m.draws);
+        personalCards.push({
+          name: cnt > 0 ? `${name} ×${cnt}` : name,
+          source: '个人满赠',
+          tier: m.note || tierLabel,
+          unlocked: cnt > 0,
+        });
+      } else {
+        personalCards.push({
+          name,
+          source: '个人满赠',
+          tier: m.note ? `${tierLabel} · ${m.note}` : tierLabel,
+          unlocked,
+        });
+      }
+    });
   });
   // 全员满赠奖励卡
   const globalCards = GLOBAL_BONUS.map(m => ({
@@ -855,13 +876,21 @@ function openBonusDetail(type) {
         ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}${m.draws}`
         : `${m.draws}`;
       const pct = Math.min(100, Math.round((val / m.draws) * 100));
-      const countText = unlocked
-        ? `${m.rewards.length}张已解锁`
-        : `${val}/${m.draws}`;
+      let countText, rewardText;
+      if (m.stack) {
+        const cnt = Math.floor(val / m.draws);
+        countText = cnt > 0 ? `×${cnt}已解锁` : `${val}/${m.draws}`;
+        rewardText = `${cnt > 0 ? '✅ ' : '🔒 '}${m.rewards.join(' + ')}${m.note ? `（${m.note}）` : ''}`;
+      } else {
+        countText = unlocked
+          ? `${m.rewards.length}张已解锁`
+          : `${val}/${m.draws}`;
+        rewardText = `${unlocked ? '✅ ' : '🔒 '}${m.rewards.join(' + ')}${m.note ? `（${m.note}）` : ''}`;
+      }
       return `<div class="ms-row ${unlocked ? 'done' : ''}">
         <span class="ms-label">${label}抽</span>
         <div class="ms-bar-wrap"><div class="ms-bar-fill${unlocked ? ' done' : ''}" style="width:${pct}%"></div></div>
-        <span class="ms-reward">${unlocked ? '✅ ' : '🔒 '}${m.rewards.join(' + ')}</span>
+        <span class="ms-reward">${rewardText}</span>
         <span class="ms-count">${countText}</span>
       </div>`;
     }).join('');
