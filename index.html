@@ -73,6 +73,15 @@
         <button class="purge-btn" id="purgeSelectBtn" onclick="togglePurgeMode()">选择一键保留数据</button>
         <button class="purge-btn primary" id="purgeExportBtn" onclick="exportPurgeData()" disabled>导出一键保留数据<span class="purge-badge" id="purgeBadge"></span></button>
       </div>
+      <div class="purge-quick" id="purgeQuick" style="display:none;">
+        <div class="purge-quick-title">⚡ 快捷操作</div>
+        <div class="purge-quick-row">
+          <span class="purge-quick-label">所有卡面一键保留</span>
+          <input type="number" class="purge-quick-input" id="purgeQuickInput" value="1" min="0" max="99">
+          <span class="purge-quick-label">张</span>
+          <button class="purge-quick-apply" onclick="applyPurgeQuick()">应用</button>
+        </div>
+      </div>
       <div class="sub-tabs">
         <button class="sub-tab active" data-sub="input" onclick="switchSubTab('input')">🔢 手动输入</button>
         <button class="sub-tab" data-sub="ocr" onclick="switchSubTab('ocr')">📷 截图识别</button>

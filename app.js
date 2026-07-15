@@ -1881,8 +1881,35 @@ function togglePurgeMode() {
   if (selectBtn)
     selectBtn.textContent = purgeMode ? '取消一键保留' : '选择一键保留数据';
   if (exportBtn) exportBtn.disabled = !purgeMode;
+  const quickEl = document.getElementById('purgeQuick');
+  if (quickEl) quickEl.style.display = purgeMode ? '' : 'none';
   updatePurgeBadge();
   renderEntry();
+}
+// 一键设置两池所有普通卡为指定张数（保留模式快捷操作）
+// 一键设置两池所有普通卡为指定张数（保留模式快捷操作）
+function applyPurgeQuick() {
+  if (!purgeMode) return;
+  const inputEl = document.getElementById('purgeQuickInput');
+  if (!inputEl) return;
+  let n = parseInt(inputEl.value);
+  if (isNaN(n) || n < 0) { showToast('⚠️ 请输入有效数字'); return; }
+  if (n > 99) n = 99;
+  for (const pool of ['xiari', 'junuan']) {
+    if (!cardCounts[pool]) cardCounts[pool] = {};
+    for (const card of poolCards(pool)) {
+      if (card.rarity === 'ex') continue; // 特殊奖励不设
+      // 原数字小于设定值时保留原数字（不放大）
+      const cur = cardCounts[pool][card.id] || 0;
+      cardCounts[pool][card.id] = cur < n ? cur : n;
+    }
+  }
+  saveData();
+  renderEntry();
+  updateStats();
+  renderPanels();
+  updatePurgeBadge();
+  showToast(`✅ 已应用：每张卡最多保留 ${n} 张`);
 }
 // 计算正常模式总张数（快照）与保留模式总张数（当前）的差额，更新角标
 function updatePurgeBadge() {

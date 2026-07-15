@@ -410,6 +410,14 @@ html, body {
 
 /* 一键消除按钮栏 */
 .purge-bar { display: flex; gap: 8px; margin-bottom: 12px; }
+.purge-quick { background: var(--white); border: 1.5px dashed var(--orange-300); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.purge-quick-title { font-size: 13px; font-weight: 700; color: var(--orange-600); margin-bottom: 8px; }
+.purge-quick-row { display: flex; align-items: center; gap: 8px; }
+.purge-quick-label { font-size: 13px; font-weight: 600; color: var(--brown-800); }
+.purge-quick-input { width: 56px; padding: 6px 8px; border: 1.5px solid var(--orange-200); border-radius: 8px; font-size: 16px; font-weight: 700; text-align: center; color: var(--brown-900); font-family: inherit; }
+.purge-quick-input:focus { outline: none; border-color: var(--orange-500); }
+.purge-quick-apply { margin-left: auto; padding: 8px 20px; border: none; border-radius: 8px; background: linear-gradient(135deg, var(--orange-500), var(--orange-600)); color: white; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.purge-quick-apply:active { transform: scale(0.94); }
 .purge-btn {
   flex: 1; padding: 10px; border: 1.5px solid var(--orange-300); background: var(--white);
   color: var(--orange-600); font-size: 12px; font-weight: 700; border-radius: 10px;
