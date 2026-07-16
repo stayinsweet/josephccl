@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 157454;
+const GLOBAL_TOTAL_DRAWS = 167002;
 // 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -229,45 +229,193 @@ let purgeSnapshot = null; // 进入模式前的 cardCounts 快照
 // 额外奖励（限时礼 / 宣传礼）用户确认状态
 let extraRewards = { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
 
+// 多账号：accounts = { id: {name, cardCounts, history, cardImages, extraRewards} }
+// activeAccountId 为真实 id 或 'all'（合并视图）；accountOrder 为显示顺序
+let accounts = {};
+let activeAccountId = 'a1';
+let accountOrder = [];
+
+// 空账号数据模板
+function emptyAccountData() {
+  return {
+    cardCounts: { xiari: {}, junuan: {} },
+    history: [],
+    cardImages: { xiari: {}, junuan: {} },
+    extraRewards: { 限时时段: null, 宣传达标: false, 宣传下单时间: '' },
+  };
+}
+// 默认 extraRewards
+function defaultExtraRewards() {
+  return { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
+}
+
 // ==================== PERSISTENCE ====================
 function loadData() {
   try {
     const d = JSON.parse(localStorage.getItem('ccg2_data') || '{}');
-    cardCounts = d.cardCounts || { xiari: {}, junuan: {} };
-    history = d.history || [];
-    cardImages = d.cardImages || { xiari: {}, junuan: {} };
-    extraRewards = d.extraRewards || {
-      限时时段: null,
-      宣传达标: false,
-      宣传下单时间: '',
-    };
-  } catch (e) {}
-  // 迁移：删除新卡池中不存在的旧 id（如旧 xiari 的 r9/r10/r11）
-  for (const pool of ['xiari', 'junuan']) {
-    const valid = new Set(poolIDs(pool));
-    if (cardCounts[pool]) {
-      for (const id of Object.keys(cardCounts[pool])) {
-        if (!valid.has(id)) delete cardCounts[pool][id];
+    if (d.accounts && d.version >= 4) {
+      // v4 路径
+      accounts = d.accounts;
+      accountOrder = d.accountOrder || Object.keys(accounts);
+      // 校验 activeAccountId 合法
+      if (
+        d.activeAccountId !== 'all' &&
+        !(d.activeAccountId && accounts[d.activeAccountId])
+      ) {
+        activeAccountId = accountOrder[0] || 'a1';
+      } else {
+        activeAccountId = d.activeAccountId;
       }
+    } else {
+      // v3（或更旧）→ 迁移一次：把顶层单用户数据折进 a1
+      const acc = emptyAccountData();
+      acc.cardCounts = d.cardCounts || { xiari: {}, junuan: {} };
+      acc.cardImages = d.cardImages || { xiari: {}, junuan: {} };
+      acc.extraRewards = d.extraRewards || defaultExtraRewards();
+      // 旧 history 每项回填 accountId
+      acc.history = (d.history || []).map(h =>
+        h.accountId ? h : { ...h, accountId: 'a1' },
+      );
+      accounts = { a1: { name: '默认账号', ...acc } };
+      accountOrder = ['a1'];
+      activeAccountId = 'a1';
     }
-    if (cardImages[pool]) {
-      for (const id of Object.keys(cardImages[pool])) {
-        if (!valid.has(id)) delete cardImages[pool][id];
+  } catch (e) {
+    // 绝不丢数据：回退一个空默认账号
+    accounts = { a1: { name: '默认账号', ...emptyAccountData() } };
+    accountOrder = ['a1'];
+    activeAccountId = 'a1';
+  }
+  // 按账号清理无效 id（卡池更新后旧 id 如 xiari 的 r9/r10/r11）
+  for (const acc of Object.values(accounts)) {
+    if (!acc.cardCounts) acc.cardCounts = { xiari: {}, junuan: {} };
+    if (!acc.cardImages) acc.cardImages = { xiari: {}, junuan: {} };
+    if (!acc.history) acc.history = [];
+    if (!acc.extraRewards) acc.extraRewards = defaultExtraRewards();
+    for (const pool of ['xiari', 'junuan']) {
+      const valid = new Set(poolIDs(pool));
+      for (const id of Object.keys(acc.cardCounts[pool] || {})) {
+        if (!valid.has(id)) delete acc.cardCounts[pool][id];
+      }
+      for (const id of Object.keys(acc.cardImages[pool] || {})) {
+        if (!valid.has(id)) delete acc.cardImages[pool][id];
       }
     }
   }
+  // 装载当前账号（或合并）到活动全局
+  loadActiveAccountIntoGlobals();
+}
+// 把活动全局回写到当前账号（合并视图跳过）
+function persistActiveAccount() {
+  if (activeAccountId === 'all' || !accounts[activeAccountId]) return;
+  accounts[activeAccountId].cardCounts = cardCounts;
+  accounts[activeAccountId].history = history;
+  accounts[activeAccountId].cardImages = cardImages;
+  accounts[activeAccountId].extraRewards = extraRewards;
 }
 function saveData() {
+  persistActiveAccount();
   localStorage.setItem(
     'ccg2_data',
     JSON.stringify({
-      cardCounts,
-      history,
-      cardImages,
-      extraRewards,
-      version: 3,
+      version: 4,
+      activeAccountId,
+      accountOrder,
+      accounts,
     }),
   );
+}
+
+// ==================== ACCOUNT SWITCHING（多账号间接层）====================
+function isMergedView() {
+  return activeAccountId === 'all';
+}
+function activeAccount() {
+  return isMergedView() ? null : accounts[activeAccountId];
+}
+// 装载当前账号数据到活动全局（单账号=引用写穿；合并=克隆）
+function loadActiveAccountIntoGlobals() {
+  if (activeAccountId === 'all') {
+    computeMergedGlobals();
+  } else {
+    const a = accounts[activeAccountId];
+    if (!a) {
+      // 异常兜底
+      accounts[activeAccountId] = { name: '默认账号', ...emptyAccountData() };
+      const a2 = accounts[activeAccountId];
+      cardCounts = a2.cardCounts;
+      history = a2.history;
+      cardImages = a2.cardImages;
+      extraRewards = a2.extraRewards;
+      return;
+    }
+    cardCounts = a.cardCounts;
+    history = a.history;
+    cardImages = a.cardImages;
+    extraRewards = a.extraRewards;
+  }
+}
+// 计算合并视图的全局克隆（cardCounts 求和 / history 拼接排序 / cardImages 首见 / extraRewards 派生）
+function computeMergedGlobals() {
+  cardCounts = { xiari: {}, junuan: {} };
+  for (const id of accountOrder) {
+    const acc = accounts[id];
+    if (!acc) continue;
+    for (const pool of ['xiari', 'junuan']) {
+      for (const [cid, cnt] of Object.entries(acc.cardCounts[pool] || {})) {
+        cardCounts[pool][cid] = (cardCounts[pool][cid] || 0) + cnt;
+      }
+    }
+  }
+  // history 拼接 + 按时间降序
+  const all = [];
+  for (const id of accountOrder) {
+    const acc = accounts[id];
+    if (!acc) continue;
+    for (const h of acc.history || [])
+      all.push(h.accountId ? h : { ...h, accountId: id });
+  }
+  all.sort((a, b) => new Date(b.time) - new Date(a.time));
+  history = all;
+  // cardImages 首见优先
+  cardImages = { xiari: {}, junuan: {} };
+  for (const id of accountOrder) {
+    const acc = accounts[id];
+    if (!acc) continue;
+    for (const pool of ['xiari', 'junuan']) {
+      for (const [cid, img] of Object.entries(acc.cardImages[pool] || {})) {
+        if (!cardImages[pool][cid]) cardImages[pool][cid] = img;
+      }
+    }
+  }
+  // extraRewards 派生并集（仅展示，确认动作被 guard）
+  extraRewards = {
+    限时时段:
+      accountOrder
+        .map(id => accounts[id] && accounts[id].extraRewards.限时时段)
+        .find(Boolean) || null,
+    宣传达标: accountOrder.some(
+      id => accounts[id] && accounts[id].extraRewards.宣传达标,
+    ),
+    宣传下单时间:
+      accountOrder
+        .map(id => accounts[id] && accounts[id].extraRewards.宣传下单时间)
+        .find(Boolean) || '',
+  };
+}
+// 切换账号（单账号或合并视图）
+function switchAccount(id) {
+  if (id !== 'all' && !accounts[id]) return;
+  if (purgeMode) exitPurgeMode(); // purge 快照属上一账号，不可串
+  activeAccountId = id;
+  loadActiveAccountIntoGlobals();
+  saveData();
+  updateStats();
+  renderPanels();
+  renderCollection();
+  if (currentTab === 'entry') renderEntry();
+  if (currentTab === 'history') renderHistory();
+  updateAccountSwitcherLabel();
 }
 
 // ==================== HELPERS ====================
@@ -326,6 +474,7 @@ function personalTierUnlocked(m) {
 // 个人满赠已解锁奖励卡数（按「卡位」计：叠加档位如许愿卡只算1个卡位，
 // 实际张数 ×N 仅在卡片上展示，不计入进度计数）
 function personalUnlockedCount() {
+  if (isMergedView()) return mergedUnlockedByCategory().personal.size;
   let n = 0;
   for (const m of PERSONAL_BONUS) {
     if (m.stack) {
@@ -344,6 +493,7 @@ function wishCardCount() {
 }
 // 全员满赠已解锁特典卡数（全员抽数达标 且 个人>=10抽 才解锁）
 function globalUnlockedCount() {
+  if (isMergedView()) return mergedUnlockedByCategory().global.size;
   const personalEligible = totalDraws() >= GLOBAL_PERSONAL_MIN;
   let n = 0;
   for (const m of GLOBAL_BONUS) {
@@ -379,9 +529,93 @@ function limitedUnlockedCount() {
 }
 // 额外奖励已解锁总数（限时 + 宣传）
 function extraUnlockedCount() {
+  if (isMergedView()) {
+    const c = mergedUnlockedByCategory();
+    return c.limited.size + c.promo.size;
+  }
   return limitedUnlockedCount() + (promoUnlocked() ? 1 : 0);
 }
 const EXTRA_TOTAL = 4; // 限时3 + 宣传1
+
+// ==================== 多账号：按账号计算奖励解锁（纯函数，不碰全局）====================
+function accountTotalDraws(acc) {
+  let t = 0;
+  for (const pool of ['xiari', 'junuan'])
+    for (const cnt of Object.values((acc.cardCounts || {})[pool] || {}))
+      t += cnt;
+  return t;
+}
+function accountPoolDraws(acc, pool) {
+  let n = 0;
+  for (const cnt of Object.values((acc.cardCounts || {})[pool] || {})) n += cnt;
+  return n;
+}
+function accountPersonalTierUnlocked(acc, m) {
+  const val = m.pool ? accountPoolDraws(acc, m.pool) : accountTotalDraws(acc);
+  return val >= m.draws;
+}
+// 返回该账号已解锁的奖励卡名，分四类 Set
+function accountUnlockedByCategory(acc) {
+  const personal = new Set(),
+    global = new Set(),
+    limited = new Set(),
+    promo = new Set();
+  for (const m of PERSONAL_BONUS) {
+    const val = m.pool ? accountPoolDraws(acc, m.pool) : accountTotalDraws(acc);
+    const unlocked = m.stack ? Math.floor(val / m.draws) > 0 : val >= m.draws;
+    if (unlocked) m.rewards.forEach(n => personal.add(n));
+  }
+  const eligible = accountTotalDraws(acc) >= GLOBAL_PERSONAL_MIN;
+  for (const m of GLOBAL_BONUS) {
+    if (GLOBAL_TOTAL_DRAWS >= m.draws && eligible) global.add(m.card);
+  }
+  const t = acc.extraRewards && acc.extraRewards.限时时段;
+  const limitedSet =
+    t === '0-2'
+      ? ['限时卡1', '限时卡2', '限时卡3']
+      : t === '3-6'
+        ? ['限时卡1', '限时卡2']
+        : t === '7-24'
+          ? ['限时卡3']
+          : [];
+  limitedSet.forEach(n => limited.add(n));
+  if (
+    accountTotalDraws(acc) > 0 &&
+    acc.extraRewards &&
+    acc.extraRewards.宣传达标
+  )
+    promo.add('宣传卡');
+  return { personal, global, limited, promo };
+}
+// 合并视图：各账号四类取并集
+function mergedUnlockedByCategory() {
+  const agg = {
+    personal: new Set(),
+    global: new Set(),
+    limited: new Set(),
+    promo: new Set(),
+  };
+  for (const id of accountOrder) {
+    const acc = accounts[id];
+    if (!acc) continue;
+    const c = accountUnlockedByCategory(acc);
+    for (const k of Object.keys(agg)) for (const n of c[k]) agg[k].add(n);
+  }
+  return agg;
+}
+function mergedUnlockedSet() {
+  const c = mergedUnlockedByCategory();
+  return new Set([...c.personal, ...c.global, ...c.limited, ...c.promo]);
+}
+// 任一账号该确认字段为真
+function anyAccountExtraConfirmed(field) {
+  return accountOrder.some(
+    id =>
+      accounts[id] &&
+      accounts[id].extraRewards &&
+      accounts[id].extraRewards[field],
+  );
+}
 
 // ==================== POOL & TAB ====================
 function switchPool(pool) {
@@ -512,6 +746,7 @@ function renderPanels() {
 function renderRewardPool() {
   const panel = document.getElementById('rewardPool');
   if (!panel) return;
+  if (isMergedView()) return renderRewardPoolMerged(panel);
   const total = totalDraws();
   const personalEligible = total >= GLOBAL_PERSONAL_MIN;
 
@@ -629,6 +864,116 @@ function renderRewardPool() {
 
   panel.innerHTML = `
     <div class="panel-title"><span class="title-bar"></span>奖励卡池 <span class="panel-sub">满赠自动解锁，不可手动加减</span></div>
+    ${renderGroup('个人满赠', `${pUnlocked}/${PERSONAL_BONUS_TOTAL}`, personalCards, 'rw-personal')}
+    ${renderGroup('全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
+    ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
+    ${renderConfirmGroup('宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
+  `;
+}
+
+// 合并视图奖励卡池：各账号解锁取并集，确认按钮展示任一账号确认状态（点击被 guard 拦截）
+function renderRewardPoolMerged(panel) {
+  const cat = mergedUnlockedByCategory();
+  // 个人满赠：每张奖励卡 unlocked = 任一账号解锁
+  const personalCards = [];
+  PERSONAL_BONUS.forEach(m => {
+    const tierLabel = m.pool
+      ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}池${m.draws}抽`
+      : `${m.draws}抽`;
+    m.rewards.forEach(name => {
+      personalCards.push({
+        name,
+        source: '个人满赠',
+        tier: m.note ? `${tierLabel} · ${m.note}` : tierLabel,
+        unlocked: cat.personal.has(name),
+      });
+    });
+  });
+  const globalCards = GLOBAL_BONUS.map(m => ({
+    name: m.card,
+    source: '全员满赠',
+    tier: fmtWan(m.draws) + '抽',
+    unlocked: cat.global.has(m.card),
+  }));
+
+  const renderGroup = (title, sub, cards, colorClass) => {
+    const cells = cards
+      .map(c => {
+        const img = rewardImg(c.name);
+        const phHTML = c.unlocked
+          ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
+          : `<img src="${img}" alt="${c.name}" class="locked-img"><span class="reward-ph locked-emoji">🔒</span>`;
+        return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}" onclick="openRewardModal('${c.name}','${title.replace(/'/g, '')}','${c.tier}',${c.unlocked})">
+        <div class="reward-ph-wrap">${phHTML}</div>
+        <div class="reward-name">${c.name}</div>
+        <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
+      </div>`;
+      })
+      .join('');
+    return `<div class="reward-group">
+      <div class="reward-group-head"><span>${title}</span><span class="reward-group-sub">${sub}</span></div>
+      <div class="reward-grid">${cells}</div>
+    </div>`;
+  };
+
+  const pUnlocked = cat.personal.size;
+  const gUnlocked = cat.global.size;
+
+  const limitedCards = [
+    {
+      name: '限时卡1',
+      tier: '0-2h / 3-6h',
+      unlocked: cat.limited.has('限时卡1'),
+    },
+    {
+      name: '限时卡2',
+      tier: '0-2h / 3-6h',
+      unlocked: cat.limited.has('限时卡2'),
+    },
+    {
+      name: '限时卡3',
+      tier: '0-2h / 7-24h',
+      unlocked: cat.limited.has('限时卡3'),
+    },
+  ];
+  const promoCards = [
+    { name: '宣传卡', tier: '达标+有记录', unlocked: cat.promo.has('宣传卡') },
+  ];
+  const lUnlocked = cat.limited.size;
+  const rUnlocked = cat.promo.size;
+  const lConfirmed = anyAccountExtraConfirmed('限时时段');
+  const rConfirmed = anyAccountExtraConfirmed('宣传达标');
+
+  const renderConfirmGroup = (
+    title,
+    sub,
+    cards,
+    colorClass,
+    confirmed,
+    onConfirm,
+  ) => `
+    <div class="reward-group">
+      <div class="reward-group-head">
+        <span>${title}</span>
+        <button class="reward-confirm-btn${confirmed ? ' done' : ''}" onclick="${onConfirm}">${confirmed ? '已确认 ✓' : '去确认'}</button>
+      </div>
+      <div class="reward-grid">${cards
+        .map(c => {
+          const img = rewardImg(c.name);
+          const phHTML = c.unlocked
+            ? `<img src="${img}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="reward-ph" style="display:none;">🎁</span>`
+            : `<img src="${img}" alt="${c.name}" class="locked-img"><span class="reward-ph locked-emoji">🔒</span>`;
+          return `<div class="reward-cell ${c.unlocked ? 'unlocked' : 'locked'} ${colorClass}" onclick="openRewardModal('${c.name}','${title.replace(/'/g, '').replace(/🍏|🍉/g, '').trim()}','${c.tier}',${c.unlocked})">
+          <div class="reward-ph-wrap">${phHTML}</div>
+          <div class="reward-name">${c.name}</div>
+          <div class="reward-tier">${c.unlocked ? '已解锁' : c.tier}</div>
+        </div>`;
+        })
+        .join('')}</div>
+    </div>`;
+
+  panel.innerHTML = `
+    <div class="panel-title"><span class="title-bar"></span>奖励卡池 <span class="panel-sub">合并视图·各账号解锁取并集</span></div>
     ${renderGroup('个人满赠', `${pUnlocked}/${PERSONAL_BONUS_TOTAL}`, personalCards, 'rw-personal')}
     ${renderGroup('全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
     ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
@@ -801,6 +1146,10 @@ function fmtWan(n) {
 function renderBonus() {
   const panel = document.getElementById('bonusPanel');
   if (!panel) return;
+  if (isMergedView()) {
+    panel.innerHTML = `<div class="bn-merged-note">满赠按各账号单独计算，请选择具体账号查看进度</div>`;
+    return;
+  }
   const total = totalDraws();
   const personalEligible = total >= GLOBAL_PERSONAL_MIN;
   const pUnlocked = personalUnlockedCount();
@@ -943,6 +1292,10 @@ const LIMITED_TIERS = [
 ];
 
 function openLimitedConfirm() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   extraModalMode = 'limited';
   const cur = extraRewards.限时时段;
   const opts = LIMITED_TIERS.map(
@@ -960,6 +1313,10 @@ function openLimitedConfirm() {
 }
 
 function openPromoConfirm() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   extraModalMode = 'promo';
   const hasRecord = totalDraws() > 0;
   const cur = extraRewards;
@@ -975,6 +1332,10 @@ function openPromoConfirm() {
 }
 
 function confirmExtraModal() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   if (extraModalMode === 'limited') {
     const checked = document.querySelector('input[name="limitedTier"]:checked');
     extraRewards.限时时段 = checked ? checked.value : null;
@@ -1405,6 +1766,10 @@ async function handleScreenshots(event) {
   const files = Array.from(event.target.files);
   if (files.length === 0) return;
   event.target.value = '';
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
 
   document.getElementById('uploadPreview').classList.add('show');
   document.getElementById('ocrLoading').style.display = 'block';
@@ -1471,21 +1836,21 @@ async function handleScreenshots(event) {
           console.log(JSON.stringify(imgCounts));
           console.log('识别顺序:', matchOrder.join(', '));
 
-          // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
+          // === 检测奖品数量：数以「奖品」开头的行数（每行一个奖品条目）
+          // 比取「奖品N」的最大编号更稳健——OCR 易把编号识错（奖品12→奖品1 2）
           let expectedTotal = 0;
-          const prizePattern = /奖品\s*(\d{1,2})/g;
-          let pm;
-          while ((pm = prizePattern.exec(fullText)) !== null) {
-            const n = parseInt(pm[1]);
-            if (n > expectedTotal) expectedTotal = n;
+          const lines = fullText.split(/\n/);
+          for (const line of lines) {
+            // 去掉行首空白后判断是否以「奖品」开头；容忍「奖 品」中间空格
+            const trimmed = line.replace(/^\s+/, '');
+            if (/^奖\s*品/i.test(trimmed)) {
+              expectedTotal++;
+              continue;
+            }
+            // 英文 prize 开头兜底
+            if (/^prize/i.test(trimmed)) expectedTotal++;
           }
-          // 也检查 "Prize" 英文写法
-          const prizePatternEN = /prize\s*(\d{1,2})/gi;
-          while ((pm = prizePatternEN.exec(fullText)) !== null) {
-            const n = parseInt(pm[1]);
-            if (n > expectedTotal) expectedTotal = n;
-          }
-          console.log('检测到奖品总数: ' + expectedTotal);
+          console.log('检测到奖品总数(按行计): ' + expectedTotal);
           ocrExpectedTotal = expectedTotal; // 存为全局变量
 
           // 奖位上限约束：单卡数量不超过奖位数
@@ -1494,18 +1859,12 @@ async function handleScreenshots(event) {
           }
 
           // 奖品位校验修正
-          const rawTotal = Object.values(imgCounts).reduce(
-            (s, c) => s + c,
-            0,
-          );
+          const rawTotal = Object.values(imgCounts).reduce((s, c) => s + c, 0);
           if (expectedTotal > 0 && rawTotal > expectedTotal) {
             const scale = expectedTotal / rawTotal;
             for (const id of Object.keys(imgCounts))
               imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
-            let adjTotal = Object.values(imgCounts).reduce(
-              (s, c) => s + c,
-              0,
-            );
+            let adjTotal = Object.values(imgCounts).reduce((s, c) => s + c, 0);
             const sortedIds = Object.keys(imgCounts).sort(
               (a, b) => imgCounts[b] - imgCounts[a],
             );
@@ -1650,9 +2009,7 @@ function jumpImgEdit(idx) {
 // 生成卡号下拉选项（按卡牌类型 optgroup 分组）
 // predicate 过滤可选卡；selectedId 标记当前项；includePlaceholder 加「添加」占位项
 function imgEditOptionHTML(pool, predicate, selectedId, includePlaceholder) {
-  const cards = poolCards(pool).filter(
-    c => c.rarity !== 'ex' && predicate(c),
-  );
+  const cards = poolCards(pool).filter(c => c.rarity !== 'ex' && predicate(c));
   const byType = {};
   for (const c of cards) (byType[c.type] = byType[c.type] || []).push(c);
   let html = includePlaceholder
@@ -1829,6 +2186,10 @@ function renderOCR() {
 }
 
 function adjustOCR(pool, id, delta) {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   if (!ocrSelected[pool]) ocrSelected[pool] = {};
   const cur = ocrSelected[pool][id] || 0;
   const newVal = Math.max(0, Math.min(10, cur + delta));
@@ -1856,6 +2217,10 @@ function deselectAllOCR() {
 }
 
 function confirmOCR() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   let total = 0;
   for (const pool of ['xiari', 'junuan']) {
     const sel = ocrSelected[pool] || {};
@@ -1900,6 +2265,10 @@ function clearOCR() {
 // ==================== MANUAL INPUT (录入网格) ====================
 // 一键保留模式：切换标记状态
 function togglePurgeMode() {
+  if (isMergedView() && !purgeMode) {
+    showToast('请先选择具体账号');
+    return;
+  }
   purgeMode = !purgeMode;
   const selectBtn = document.getElementById('purgeSelectBtn');
   const exportBtn = document.getElementById('purgeExportBtn');
@@ -1928,6 +2297,10 @@ function togglePurgeMode() {
 // 一键设置两池所有普通卡为指定张数（保留模式快捷操作）
 function applyPurgeQuick() {
   if (!purgeMode) return;
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   const inputEl = document.getElementById('purgeQuickInput');
   if (!inputEl) return;
   let n = parseInt(inputEl.value);
@@ -1981,6 +2354,10 @@ function updatePurgeBadge() {
 // 导出一键保留数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
 async function exportPurgeData() {
   if (!purgeMode) return;
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   // 计算差额：正常模式 - 保留模式
   let normalTotal = 0,
     purgeTotal = 0;
@@ -2147,15 +2524,19 @@ function entryCellHTML(card, c) {
     : `<span>${idText}</span>`;
   const cnt = c[card.id] || 0;
   const keepBadge = purgeMode ? '<div class="keep-badge">保留</div>' : '';
-  return `<div class="card-cell entry-cell ${card.rarity} ${cnt > 0 ? 'has' : 'zero'}" id="ecell-${card.id}">
+  const disabled = isMergedView();
+  const disAttr = disabled ? 'disabled' : '';
+  const roAttr = disabled ? 'readonly' : '';
+  const mergedCls = disabled ? ' entry-cell-merged' : '';
+  return `<div class="card-cell entry-cell ${card.rarity} ${cnt > 0 ? 'has' : 'zero'}${mergedCls}" id="ecell-${card.id}">
     <div class="placeholder" data-cid="${idText}">${imgHTML}</div>
     ${keepBadge}
     <div class="cid">${idText}</div>
     <div class="cname">${card.name}</div>
     <div class="entry-ctrl">
-      <button class="entry-btn" onclick="adjustEntry('${card.id}', -1)">−</button>
-      <input class="entry-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${cnt}" data-id="${card.id}" onfocus="this.select()" onchange="setEntryCount('${card.id}', this.value)">
-      <button class="entry-btn" onclick="adjustEntry('${card.id}', 1)">+</button>
+      <button class="entry-btn" ${disAttr} onclick="adjustEntry('${card.id}', -1)">−</button>
+      <input class="entry-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${cnt}" data-id="${card.id}" onfocus="this.select()" ${roAttr} onchange="setEntryCount('${card.id}', this.value)">
+      <button class="entry-btn" ${disAttr} onclick="adjustEntry('${card.id}', 1)">+</button>
     </div>
     <div class="entry-over-hint" id="eohint-${card.id}"></div>
   </div>`;
@@ -2215,6 +2596,10 @@ function groupKeyOf(card) {
 
 // 录入页卡片加减（直接修改数量，记录到 history）
 function adjustEntry(id, delta) {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   const card = cardByID(currentPool, id);
   if (!card) return;
   if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
@@ -2250,6 +2635,10 @@ function adjustEntry(id, delta) {
 
 // 录入页手动输入数量（直接设为指定值，差异记为单抽/调整）
 function setEntryCount(id, val) {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   const card = cardByID(currentPool, id);
   if (!card) return;
   if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
@@ -2287,6 +2676,10 @@ function pushHistory(entry) {
 }
 
 function undoLast() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   const last = history[0];
   if (!last) {
     showToast('⚠️ 没有可撤销的记录');
@@ -2317,6 +2710,10 @@ function addCards(cards, type) {
 }
 // 指定池添加（OCR 混合上传时两池分别加）
 function addCardsToPool(pool, cards, type) {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   if (!cardCounts[pool]) cardCounts[pool] = {};
   for (const id of cards) {
     cardCounts[pool][id] = (cardCounts[pool][id] || 0) + 1;
@@ -2335,6 +2732,11 @@ function addCardsToPool(pool, cards, type) {
 }
 
 // ==================== HISTORY ====================
+// 历史 item 所属账号名（合并视图标签用）
+function historyItemAccountName(h) {
+  const id = h.accountId;
+  return id && accounts[id] ? accounts[id].name : '默认账号';
+}
 function renderHistory() {
   const container = document.getElementById('historyList');
   if (history.length === 0) {
@@ -2343,12 +2745,15 @@ function renderHistory() {
     return;
   }
   // 分组：手动操作(manual/adjust)按「所在分钟」+ 池子归组；OCR/十连各自独立成组
+  // 合并视图下并入 accountId，避免不同账号同分钟同池误合并
+  const merged = isMergedView();
   const groups = [];
   for (const h of history) {
     const isManual = h.type === 'manual' || h.type === 'adjust';
     const t = new Date(h.time);
-    // 分钟桶 key：年月日时分子
-    const bucketKey = `${t.getFullYear()}-${t.getMonth()}-${t.getDate()}-${t.getHours()}-${t.getMinutes()}`;
+    const accKey = merged ? h.accountId || '' : '';
+    // 分钟桶 key：年月日时分子(+账号)
+    const bucketKey = `${accKey}|${t.getFullYear()}-${t.getMonth()}-${t.getDate()}-${t.getHours()}-${t.getMinutes()}`;
     const last = groups[groups.length - 1];
     if (
       isManual &&
@@ -2420,8 +2825,11 @@ function renderHistory() {
         : g.items[0].type === 'ocr'
           ? `📸截图 ${g.items.reduce((s, it) => s + it.cards.length, 0)}张`
           : '🔟十连';
+      const accTag = merged
+        ? ` · ${escapeHtml(historyItemAccountName(g.items[0]))}`
+        : '';
       return `<div class="history-item">
-      <div class="history-header"><span class="history-pool">${pn} · ${label}</span><span class="history-time">${ts}</span></div>
+      <div class="history-header"><span class="history-pool">${pn} · ${label}${accTag}</span><span class="history-time">${ts}</span></div>
       <div class="history-cards">${chips}</div>
     </div>`;
     })
@@ -2523,6 +2931,10 @@ function viewPurgeCollection(idx) {
   }
 }
 async function clearHistory() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
   const ok = await showConfirmModal({
     title: '清空记录',
     body: '确定要清空所有记录吗？（卡牌数量不会丢失）',
@@ -2541,21 +2953,25 @@ async function clearHistory() {
 
 // ==================== EXPORT ====================
 function exportData() {
+  persistActiveAccount();
   const json = JSON.stringify(
-    { cardCounts, history, cardImages, extraRewards, version: 3 },
+    { version: 4, activeAccountId, accountOrder, accounts },
     null,
     2,
   );
-  // 往记录页生成一条导出记录（含 JSON 字符串，便于复制）
-  history.unshift({
-    time: new Date().toISOString(),
-    pool: currentPool,
-    cards: [],
-    type: 'export',
-    json,
-  });
-  saveData();
-  renderHistory();
+  // 往记录页生成一条导出记录（含完整 JSON 字符串，便于复制）
+  // 合并视图只读，跳过记录；单账号视图记录到当前账号
+  if (!isMergedView()) {
+    history.unshift({
+      time: new Date().toISOString(),
+      pool: currentPool,
+      cards: [],
+      type: 'export',
+      json,
+    });
+    saveData();
+    renderHistory();
+  }
   // 先尝试下载文件（部分手机不支持则忽略），再做剪切板（避免剪切板操作打断下载）
   try {
     const blob = new Blob([json], { type: 'application/json' });
@@ -2637,25 +3053,59 @@ function confirmImportPaste() {
 function applyImportData(text) {
   try {
     const data = JSON.parse(text);
+    if (data.accounts && data.version >= 4) {
+      // v4 多账号备份：整体替换，全量恢复
+      accounts = data.accounts;
+      accountOrder = data.accountOrder || Object.keys(accounts);
+      activeAccountId =
+        data.activeAccountId === 'all' ||
+        (data.activeAccountId && accounts[data.activeAccountId])
+          ? data.activeAccountId
+          : accountOrder[0] || 'a1';
+      // 兜底：确保每个账号字段完整
+      for (const acc of Object.values(accounts)) {
+        if (!acc.cardCounts) acc.cardCounts = { xiari: {}, junuan: {} };
+        if (!acc.cardImages) acc.cardImages = { xiari: {}, junuan: {} };
+        if (!acc.history) acc.history = [];
+        if (!acc.extraRewards) acc.extraRewards = defaultExtraRewards();
+      }
+      // 先装载到全局（让全局指向新导入的当前账号数据），再 saveData
+      // 否则 persistActiveAccount 会用旧全局覆盖 accounts[activeAccountId]
+      loadActiveAccountIntoGlobals();
+      saveData();
+      updateStats();
+      renderCollection();
+      renderHistory();
+      renderPanels();
+      if (currentTab === 'entry') renderEntry();
+      updateAccountSwitcherLabel();
+      showToast('📥 数据已导入（全部账号）');
+      return true;
+    }
+    // v3 单账号备份：替换当前账号数据（合并视图下拦截）
     if (!data.cardCounts) {
       showToast('⚠️ 无效的备份数据');
       return false;
     }
+    if (isMergedView()) {
+      showToast('请先选择具体账号');
+      return false;
+    }
+    // 改全局变量（而非 acc.xxx），否则 persistActiveAccount 会用旧全局覆盖 acc
     cardCounts = data.cardCounts || { xiari: {}, junuan: {} };
-    history = data.history || [];
     cardImages = data.cardImages || { xiari: {}, junuan: {} };
-    extraRewards = data.extraRewards || {
-      限时时段: null,
-      宣传达标: false,
-      宣传下单时间: '',
-    };
-    saveData();
-    loadData(); // 迁移导入的旧数据
+    extraRewards = data.extraRewards || defaultExtraRewards();
+    history = (data.history || []).map(h =>
+      h.accountId ? h : { ...h, accountId: activeAccountId },
+    );
+    saveData(); // persistActiveAccount 把新全局回写到当前账号
+    loadActiveAccountIntoGlobals();
     updateStats();
     renderCollection();
     renderHistory();
     renderPanels();
-    showToast('📥 数据已导入');
+    if (currentTab === 'entry') renderEntry();
+    showToast('📥 数据已导入（当前账号）');
     return true;
   } catch (err) {
     showToast('⚠️ 数据格式错误');
@@ -2664,25 +3114,35 @@ function applyImportData(text) {
 }
 
 async function clearAllData() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
+  const accName = accounts[activeAccountId]
+    ? accounts[activeAccountId].name
+    : '当前账号';
   const ok = await showConfirmModal({
-    title: '⚠️ 清空所有数据',
-    body: '确定要清空所有数据吗？（包括卡牌数量、记录、卡图）<br><br><strong style="color:var(--danger);">此操作不可恢复！建议先备份。</strong>',
+    title: '⚠️ 清空账号数据',
+    body: `确定要清空账号「${accName}」的所有数据吗？（包括卡牌数量、记录、卡图）<br><br><strong style="color:var(--danger);">此操作不可恢复！建议先备份。</strong>`,
     buttons: [
       { text: '取消', type: 'outline', value: false },
       { text: '清空', type: 'primary', value: true },
     ],
   });
   if (!ok) return;
+  // 改全局变量（而非 acc.xxx），否则 persistActiveAccount 会用旧全局覆盖 acc
   cardCounts = { xiari: {}, junuan: {} };
   history = [];
   cardImages = { xiari: {}, junuan: {} };
-  extraRewards = { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
-  saveData();
+  extraRewards = defaultExtraRewards();
+  saveData(); // persistActiveAccount 把新全局回写到当前账号
+  loadActiveAccountIntoGlobals();
   updateStats();
   renderCollection();
   renderHistory();
   renderPanels();
-  showToast('🗑 所有数据已清空');
+  if (currentTab === 'entry') renderEntry();
+  showToast('🗑 已清空账号「' + accName + '」数据');
 }
 
 // ==================== TOAST ====================
@@ -2730,6 +3190,163 @@ function showToast(msg) {
   t._tid = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
+// ==================== 账号管理（多账号）====================
+// 文本输入弹窗（复用 confirm 模式但带输入框），返回 Promise<string|null>
+let _promptResolve = null;
+function showPromptModal({ title, placeholder = '', value = '' }) {
+  return new Promise(resolve => {
+    _promptResolve = resolve;
+    document.getElementById('promptTitle').textContent = title || '输入';
+    const inp = document.getElementById('promptInput');
+    inp.value = value;
+    inp.placeholder = placeholder;
+    document.getElementById('promptModal').style.display = 'flex';
+    setTimeout(() => {
+      inp.focus();
+      inp.select();
+    }, 50);
+  });
+}
+function closePromptModal(val) {
+  document.getElementById('promptModal').style.display = 'none';
+  const r = _promptResolve;
+  _promptResolve = null;
+  if (r) r(val && String(val).trim() ? String(val).trim() : null);
+}
+// 最小 HTML 转义（账号名为用户输入，渲染到 onclick 字符串里需转义引号）
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+// 刷新 header 切换器标签
+function updateAccountSwitcherLabel() {
+  const el = document.getElementById('accountSwitcherLabel');
+  if (!el) return;
+  el.textContent = isMergedView()
+    ? '全部账号'
+    : (accounts[activeAccountId] && accounts[activeAccountId].name) || '账号';
+}
+function openAccountModal() {
+  renderAccountList();
+  document.getElementById('accountModal').style.display = 'flex';
+}
+function closeAccountModal() {
+  document.getElementById('accountModal').style.display = 'none';
+}
+function renderAccountList() {
+  const body = document.getElementById('accountModalBody');
+  let html = `<div class="acc-row ${isMergedView() ? 'active' : ''}" onclick="selectAccount('all')">
+    <span class="acc-name">🌐 全部账号（合并）</span>
+    <span class="acc-sub">只读汇总</span>
+  </div>`;
+  accountOrder.forEach((id, i) => {
+    const a = accounts[id];
+    if (!a) return;
+    const nameEsc = escapeHtml(a.name);
+    html += `<div class="acc-row ${id === activeAccountId ? 'active' : ''}">
+      <span class="acc-name" onclick="selectAccount('${id}')">${nameEsc}</span>
+      <div class="acc-actions">
+        <button class="acc-mini" onclick="moveAccount('${id}',-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="acc-mini" onclick="moveAccount('${id}',1)" ${i === accountOrder.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="acc-mini" onclick="renameAccount('${id}')">✏️</button>
+        <button class="acc-mini danger" onclick="deleteAccount('${id}')">🗑</button>
+      </div>
+    </div>`;
+  });
+  body.innerHTML = html;
+}
+function selectAccount(id) {
+  closeAccountModal();
+  switchAccount(id);
+}
+function genAccountId() {
+  let max = 0;
+  for (const id of Object.keys(accounts)) {
+    const n = parseInt(id.slice(1));
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return 'a' + (max + 1);
+}
+async function addAccount() {
+  const name = await showPromptModal({
+    title: '添加新账号',
+    placeholder: '输入账号名称',
+  });
+  if (!name) return;
+  const id = genAccountId();
+  accounts[id] = { name, ...emptyAccountData() };
+  accountOrder.push(id);
+  saveData();
+  closeAccountModal();
+  switchAccount(id);
+  showToast('✅ 已创建账号 ' + name);
+}
+async function renameAccount(id) {
+  if (!accounts[id]) return;
+  const name = await showPromptModal({
+    title: '重命名账号',
+    value: accounts[id].name,
+  });
+  if (!name) return;
+  accounts[id].name = name;
+  saveData();
+  updateAccountSwitcherLabel();
+  renderAccountList();
+  showToast('✅ 已重命名');
+}
+async function deleteAccount(id) {
+  if (!accounts[id]) return;
+  if (accountOrder.length <= 1) {
+    showToast('⚠️ 至少保留一个账号');
+    return;
+  }
+  const ok = await showConfirmModal({
+    title: '删除账号',
+    body: `确定删除账号「${accounts[id].name}」吗？<br>该账号的<strong>所有卡牌数据、记录、卡图</strong>将被永久删除，不可恢复。`,
+    buttons: [
+      { text: '取消', type: 'outline', value: false },
+      { text: '删除', type: 'primary', value: true },
+    ],
+  });
+  if (!ok) return;
+  delete accounts[id];
+  accountOrder = accountOrder.filter(x => x !== id);
+  if (activeAccountId === id) {
+    activeAccountId = accountOrder[0];
+    loadActiveAccountIntoGlobals();
+  } else if (isMergedView()) {
+    computeMergedGlobals(); // 删除后重算合并视图
+  }
+  saveData();
+  updateAccountSwitcherLabel();
+  updateStats();
+  renderPanels();
+  renderCollection();
+  if (currentTab === 'entry') renderEntry();
+  if (currentTab === 'history') renderHistory();
+  renderAccountList();
+  showToast('🗑 已删除账号');
+}
+function moveAccount(id, dir) {
+  const i = accountOrder.indexOf(id);
+  const j = i + dir;
+  if (j < 0 || j >= accountOrder.length) return;
+  [accountOrder[i], accountOrder[j]] = [accountOrder[j], accountOrder[i]];
+  saveData();
+  if (isMergedView()) {
+    computeMergedGlobals();
+    updateStats();
+    renderPanels();
+    renderCollection();
+    if (currentTab === 'history') renderHistory();
+  }
+  renderAccountList();
+}
+
 // ==================== IMAGE API ====================
 function setCardImage(pool, id, frontBase64, backBase64) {
   if (!cardImages[pool]) cardImages[pool] = {};
@@ -2740,6 +3357,7 @@ function setCardImage(pool, id, frontBase64, backBase64) {
 
 // ==================== STARTUP ====================
 loadData();
+updateAccountSwitcherLabel();
 switchTab('collection');
 switchPool('xiari');
 renderPanels();

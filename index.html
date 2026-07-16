@@ -21,6 +21,9 @@
       <div class="header-subtitle">——🍒奇妙浆果园</div>
     </div>
     <div class="header-btns">
+      <button class="header-btn account-switcher" id="accountSwitcherBtn" onclick="openAccountModal()">
+        <span id="accountSwitcherLabel">默认账号</span> <span class="caret">▾</span>
+      </button>
       <button class="header-btn" onclick="exportData()">导出</button>
       <button class="header-btn" onclick="importData()">导入</button>
       <button class="header-btn danger" onclick="clearAllData()">清空</button>
@@ -287,6 +290,30 @@
       <button class="overview-tab" data-otab="missing" onclick="switchOvTab('missing')">🔒 未拥有</button>
     </div>
     <div id="overviewBody"></div>
+  </div>
+</div>
+
+<!-- 账号管理 Modal -->
+<div class="modal-overlay" id="accountModal" style="display:none;" onclick="if(event.target===this)closeAccountModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeAccountModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title">账号管理</div>
+    <div id="accountModalBody"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="addAccount()">➕ 添加新账号</button>
+  </div>
+</div>
+
+<!-- 文本输入 Modal（重命名/新建账号）-->
+<div class="modal-overlay" id="promptModal" style="display:none;" onclick="if(event.target===this)closePromptModal(null)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="promptTitle">输入</div>
+    <input type="text" id="promptInput" class="import-textarea" style="margin:8px 0;">
+    <div class="confirm-actions">
+      <button class="btn btn-outline" style="flex:1;" onclick="closePromptModal(null)">取消</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="closePromptModal(document.getElementById('promptInput').value)">确定</button>
+    </div>
   </div>
 </div>
 

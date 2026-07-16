@@ -679,3 +679,56 @@ html, body {
   .header-subtitle { font-size: 10px; }
   .header-btn { padding: 5px 9px; font-size: 11px; }
 }
+
+/* ==================== 多账号：账号切换器 / 账号管理 ==================== */
+.account-switcher {
+  display: flex; align-items: center; gap: 3px;
+  background: linear-gradient(135deg, var(--orange-100), var(--orange-200));
+  color: var(--orange-700); max-width: 38vw;
+}
+.account-switcher #accountSwitcherLabel {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 30vw;
+}
+.account-switcher .caret { font-size: 10px; opacity: 0.7; }
+
+.acc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 12px; border-radius: 12px; margin-bottom: 8px;
+  background: var(--orange-50); border: 2px solid transparent; transition: all 0.12s;
+}
+.acc-row:active { transform: scale(0.98); }
+.acc-row.active { border-color: var(--orange-400); background: rgba(255,237,224,0.9); }
+.acc-name { font-size: 14px; font-weight: 700; color: var(--brown-900); cursor: pointer; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc-sub { font-size: 11px; color: var(--brown-200); }
+.acc-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.acc-mini {
+  width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
+  background: var(--white); color: var(--orange-600); font-size: 13px;
+  display: flex; align-items: center; justify-content: center; font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.acc-mini:active { transform: scale(0.9); }
+.acc-mini:disabled { opacity: 0.3; cursor: not-allowed; }
+.acc-mini.danger { color: var(--danger); }
+
+/* 合并视图：满赠面板提示 */
+.bn-merged-note {
+  text-align: center; font-size: 12px; color: var(--brown-200);
+  padding: 18px 10px; line-height: 1.6;
+}
+
+/* 合并视图：录入页置灰禁用 */
+.entry-cell-merged { opacity: 0.55; }
+.entry-cell-merged .entry-btn { cursor: not-allowed; }
+.entry-cell-merged .entry-input { color: var(--brown-200); }
+
+/* prompt 输入框（复用 import-textarea 样式，补宽度）*/
+#promptModal .import-textarea { width: 100%; box-sizing: border-box; }
+#promptModal .confirm-actions { margin-top: 6px; }
+
+/* 窄屏：header 多了切换器按钮，压缩间距 */
+@media (max-width: 380px) {
+  .header-btns { gap: 4px; }
+  .account-switcher { max-width: 30vw; }
+  .account-switcher #accountSwitcherLabel { max-width: 22vw; }
+}
