@@ -395,6 +395,10 @@ function switchPool(pool) {
   if (currentTab === 'entry') renderEntry();
 }
 function switchTab(tab) {
+  // 保留模式下切到「我的收藏」或「记录」时，先自动取消保留（恢复原始数量）
+  if (purgeMode && (tab === 'collection' || tab === 'history')) {
+    togglePurgeMode();
+  }
   currentTab = tab;
   // 切换页面时滚动到顶部
   const content = document.getElementById('mainContent');
@@ -1199,37 +1203,6 @@ const COMBINED_PATTERNS = Object.entries(RARITY_CARDS)
   })
   .sort((a, b) => b.cat.length - a.cat.length); // ssr 在 sr 前匹配，避免 SSR1 被 sr 吃掉
 
-// 图片预处理：放大 + 灰度增强/二值化（mode: 'gray' | 'binary'）
-function preprocessImage(imgData, callback, mode = 'gray') {
-  const img = new Image();
-  img.onload = function () {
-    const canvas = document.createElement('canvas');
-    const scale = Math.max(2.5, 2000 / img.width); // 放大到宽度≥2000px
-    canvas.width = img.width * scale;
-    canvas.height = img.height * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imageData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      if (mode === 'binary') {
-        // 二值化：阈值 128
-        const v = gray >= 128 ? 255 : 0;
-        d[i] = d[i + 1] = d[i + 2] = v;
-      } else {
-        // 灰度增强对比度
-        const enhanced = Math.min(255, Math.max(0, (gray - 50) * 2.0));
-        d[i] = d[i + 1] = d[i + 2] = enhanced;
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-    callback(canvas.toDataURL('image/png'));
-  };
-  img.src = imgData;
-}
-
 async function getWorker() {
   if (tessWorker) return tessWorker;
   showToast('🔧 首次加载中英文识别引擎（约8MB）...');
@@ -1293,7 +1266,8 @@ function detectPool(text) {
   return null; // 无法判断
 }
 
-// 对单段文本跑 4 策略匹配，返回 {id: count}（每卡取各策略最大值）
+// 对单段文本跑 4 策略匹配，返回 {counts, order}（每卡取各策略最大值）
+// order 为按文本中首次出现位置排序的 id 列表，供弹窗按识别顺序展示
 function matchCardCounts(text, words, validIDs) {
   // 文本归一化：
   // 1) OCR 常把 SSR 的 S 识成 9（9SR），还原为 SSR
@@ -1310,6 +1284,10 @@ function matchCardCounts(text, words, validIDs) {
     }));
   }
   const results = [];
+  const firstPos = {}; // id → 文本中首次匹配位置（用于排序）
+  const recordPos = (id, pos) => {
+    if (firstPos[id] === undefined || pos < firstPos[id]) firstPos[id] = pos;
+  };
   const fixNum = s =>
     s.replace(/l/gi, '1').replace(/I/g, '1').replace(/O/gi, '0');
   // 策略AB：可选中文卡名 + 稀有度字母 + 数字（合并旧A+B，稀有度由字母决定）
@@ -1328,6 +1306,7 @@ function matchCardCounts(text, words, validIDs) {
       const id = cat + parseInt(fixNum(m[1]));
       if (validIDs.has(id)) {
         cntAB[id] = (cntAB[id] || 0) + 1;
+        recordPos(id, start);
         used.push([start, end]);
       }
     }
@@ -1336,10 +1315,17 @@ function matchCardCounts(text, words, validIDs) {
   // 策略C：单词级（置信度 > 40）
   const cntC = {};
   if (words) {
+    let pos = 0;
     for (const w of words) {
-      if (w.confidence < 40) continue;
-      const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (validIDs.has(cleaned)) cntC[cleaned] = (cntC[cleaned] || 0) + 1;
+      const next = pos + 1; // 单词级没有可靠位置，按词序递增近似
+      if (w.confidence >= 40) {
+        const cleaned = w.text.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (validIDs.has(cleaned)) {
+          cntC[cleaned] = (cntC[cleaned] || 0) + 1;
+          recordPos(cleaned, next);
+        }
+      }
+      pos = next;
     }
   }
   results.push(cntC);
@@ -1365,7 +1351,10 @@ function matchCardCounts(text, words, validIDs) {
       const numMatch = after.match(/^(\d{1,2})/);
       if (numMatch) {
         const id = cat + parseInt(numMatch[1]);
-        if (validIDs.has(id)) cntD[id] = (cntD[id] || 0) + 1;
+        if (validIDs.has(id)) {
+          cntD[id] = (cntD[id] || 0) + 1;
+          recordPos(id, idx);
+        }
       }
       idx += cnName.length;
     }
@@ -1378,7 +1367,11 @@ function matchCardCounts(text, words, validIDs) {
     for (const r of results) if (r[id] && r[id] > mx) mx = r[id];
     if (mx > 0) out[id] = mx;
   }
-  return out;
+  // 按文本首次出现位置排序
+  const order = Object.keys(out).sort(
+    (a, b) => (firstPos[a] ?? Infinity) - (firstPos[b] ?? Infinity),
+  );
+  return { counts: out, order };
 }
 
 // 预览图翻阅
@@ -1445,140 +1438,112 @@ async function handleScreenshots(event) {
     showPreview(previewImgs.length - 1);
 
     await new Promise(resolve => {
-      preprocessImage(rawImgData, async grayImgData => {
-        preprocessImage(rawImgData, async binaryImgData => {
-          const allTexts = [];
-          const allWords = [];
+      (async () => {
+        try {
+          const worker = await getWorker();
 
-          try {
-            const worker = await getWorker();
+          // 仅对原图识别一轮
+          document.getElementById('ocrStatus').textContent =
+            '🤖 正在识别（原图）...';
+          const ret = await worker.recognize(rawImgData);
+          const fullText = ret.data.text;
+          const words = ret.data.words || [];
 
-            // 第1轮：灰度增强图
-            document.getElementById('ocrStatus').textContent =
-              '🤖 第1轮识别（灰度增强）...';
-            const ret1 = await worker.recognize(grayImgData);
-            allTexts.push(ret1.data.text);
-            if (ret1.data.words) allWords.push(...ret1.data.words);
+          console.log('=== OCR 原始输出 ===');
+          console.log(fullText);
+          console.log('=== 单词 ===');
+          console.log(
+            words.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
+          );
 
-            // 第2轮：原图
-            document.getElementById('ocrStatus').textContent =
-              '🤖 第2轮识别（原图）...';
-            const ret2 = await worker.recognize(rawImgData);
-            allTexts.push(ret2.data.text);
-            if (ret2.data.words) allWords.push(...ret2.data.words);
+          // 判断本张图属于哪个池（逐图判池，混合上传时各图归各自池）
+          const imgPool = detectPool(fullText) || currentPool;
+          detectedPools.add(imgPool);
+          const validIDs = new Set(poolIDs(imgPool));
+          console.log(
+            `--- 判池结果：第${fi + 1}张 → ${imgPool}（validIDs ${validIDs.size} 个）---`,
+          );
 
-            // 第3轮：二值化图
-            document.getElementById('ocrStatus').textContent =
-              '🤖 第3轮识别（二值化）...';
-            const ret3 = await worker.recognize(binaryImgData);
-            allTexts.push(ret3.data.text);
-            if (ret3.data.words) allWords.push(...ret3.data.words);
+          const matchRes = matchCardCounts(fullText, words, validIDs);
+          const imgCounts = matchRes.counts;
+          const matchOrder = matchRes.order;
+          console.log('=== 匹配结果 imgCounts ===');
+          console.log(JSON.stringify(imgCounts));
+          console.log('识别顺序:', matchOrder.join(', '));
 
-            const fullText = allTexts.join('\n');
-            console.log('=== OCR 原始输出 ===');
-            console.log(fullText);
-            console.log('=== 单词 ===');
-            console.log(
-              allWords.map(w => `"${w.text}"(${w.confidence}%)`).join(', '),
-            );
+          // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
+          let expectedTotal = 0;
+          const prizePattern = /奖品\s*(\d{1,2})/g;
+          let pm;
+          while ((pm = prizePattern.exec(fullText)) !== null) {
+            const n = parseInt(pm[1]);
+            if (n > expectedTotal) expectedTotal = n;
+          }
+          // 也检查 "Prize" 英文写法
+          const prizePatternEN = /prize\s*(\d{1,2})/gi;
+          while ((pm = prizePatternEN.exec(fullText)) !== null) {
+            const n = parseInt(pm[1]);
+            if (n > expectedTotal) expectedTotal = n;
+          }
+          console.log('检测到奖品总数: ' + expectedTotal);
+          ocrExpectedTotal = expectedTotal; // 存为全局变量
 
-            // 判断本张图属于哪个池（逐图判池，混合上传时各图归各自池）
-            const imgPool = detectPool(fullText) || currentPool;
-            detectedPools.add(imgPool);
-            const validIDs = new Set(poolIDs(imgPool));
-
-            // 三轮分别匹配，每张卡取三轮中的最大值（避免拼接文本导致重复计数）
-            const cnt1 = matchCardCounts(
-              ret1.data.text,
-              ret1.data.words,
-              validIDs,
-            );
-            const cnt2 = matchCardCounts(
-              ret2.data.text,
-              ret2.data.words,
-              validIDs,
-            );
-            const cnt3 = matchCardCounts(
-              ret3.data.text,
-              ret3.data.words,
-              validIDs,
-            );
-            const strategyResults = [cnt1, cnt2, cnt3];
-
-            // === 检测奖品编号：奖品1, 奖品2, ... 确定本轮总抽数 ===
-            let expectedTotal = 0;
-            const prizePattern = /奖品\s*(\d{1,2})/g;
-            let pm;
-            while ((pm = prizePattern.exec(fullText)) !== null) {
-              const n = parseInt(pm[1]);
-              if (n > expectedTotal) expectedTotal = n;
-            }
-            // 也检查 "Prize" 英文写法
-            const prizePatternEN = /prize\s*(\d{1,2})/gi;
-            while ((pm = prizePatternEN.exec(fullText)) !== null) {
-              const n = parseInt(pm[1]);
-              if (n > expectedTotal) expectedTotal = n;
-            }
-            console.log('检测到奖品总数: ' + expectedTotal);
-            ocrExpectedTotal = expectedTotal; // 存为全局变量
-
-            // 合并：每张卡取各策略的最大值
-            const imgCounts = {};
-            for (const id of validIDs) {
-              let maxCnt = 0;
-              for (const sr of strategyResults) {
-                if (sr[id] && sr[id] > maxCnt) maxCnt = sr[id];
-              }
-              if (maxCnt > 0)
-                imgCounts[id] = Math.min(maxCnt, expectedTotal || 10);
-            }
-
-            // 奖品位校验修正
-            const rawTotal = Object.values(imgCounts).reduce(
-              (s, c) => s + c,
-              0,
-            );
-            if (expectedTotal > 0 && rawTotal > expectedTotal) {
-              const scale = expectedTotal / rawTotal;
-              for (const id of Object.keys(imgCounts))
-                imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
-              let adjTotal = Object.values(imgCounts).reduce(
-                (s, c) => s + c,
-                0,
-              );
-              const sortedIds = Object.keys(imgCounts).sort(
-                (a, b) => imgCounts[b] - imgCounts[a],
-              );
-              for (const id of sortedIds) {
-                while (imgCounts[id] > 1 && adjTotal > expectedTotal) {
-                  imgCounts[id]--;
-                  adjTotal--;
-                }
-              }
-            }
-
-            grandExpected += expectedTotal;
-            allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
-            // 记录本张图识别明细（用于异常定位 + 单图编辑）
-            const detectedCnt = Object.values(imgCounts).reduce(
-              (s, c) => s + c,
-              0,
-            );
-            imgResults.push({
-              idx: fi,
-              pool: imgPool,
-              counts: { ...imgCounts },
-              detected: detectedCnt,
-              expected: expectedTotal,
-            });
-          } catch (err) {
-            console.error(`第${fi + 1}张识别失败:`, err);
+          // 奖位上限约束：单卡数量不超过奖位数
+          for (const id of Object.keys(imgCounts)) {
+            imgCounts[id] = Math.min(imgCounts[id], expectedTotal || 10);
           }
 
-          document.getElementById('ocrLoading').style.display = 'none';
-          resolve();
-        }); // end binary preprocessImage callback
-      }); // end gray preprocessImage callback
+          // 奖品位校验修正
+          const rawTotal = Object.values(imgCounts).reduce(
+            (s, c) => s + c,
+            0,
+          );
+          if (expectedTotal > 0 && rawTotal > expectedTotal) {
+            const scale = expectedTotal / rawTotal;
+            for (const id of Object.keys(imgCounts))
+              imgCounts[id] = Math.max(1, Math.round(imgCounts[id] * scale));
+            let adjTotal = Object.values(imgCounts).reduce(
+              (s, c) => s + c,
+              0,
+            );
+            const sortedIds = Object.keys(imgCounts).sort(
+              (a, b) => imgCounts[b] - imgCounts[a],
+            );
+            for (const id of sortedIds) {
+              while (imgCounts[id] > 1 && adjTotal > expectedTotal) {
+                imgCounts[id]--;
+                adjTotal--;
+              }
+            }
+          }
+
+          grandExpected += expectedTotal;
+          allDebug.push(fullText.replace(/\n/g, ' ').slice(0, 80));
+          console.log(`=== 第${fi + 1}张最终结果（奖位修正后）===`);
+          console.log(
+            `池=${imgPool} 奖位=${expectedTotal} 识别=${Object.values(imgCounts).reduce((s, c) => s + c, 0)}`,
+          );
+          console.log(JSON.stringify(imgCounts));
+          // 记录本张图识别明细（用于异常定位 + 单图编辑）
+          const detectedCnt = Object.values(imgCounts).reduce(
+            (s, c) => s + c,
+            0,
+          );
+          imgResults.push({
+            idx: fi,
+            pool: imgPool,
+            counts: { ...imgCounts },
+            order: [...matchOrder],
+            detected: detectedCnt,
+            expected: expectedTotal,
+          });
+        } catch (err) {
+          console.error(`第${fi + 1}张识别失败:`, err);
+        }
+
+        document.getElementById('ocrLoading').style.display = 'none';
+        resolve();
+      })();
     }); // end Promise
   } // end for loop
 
@@ -1682,37 +1647,109 @@ function jumpImgEdit(idx) {
   imgEditIdx = idx;
   updateImgEditModal();
 }
+// 生成卡号下拉选项（按卡牌类型 optgroup 分组）
+// predicate 过滤可选卡；selectedId 标记当前项；includePlaceholder 加「添加」占位项
+function imgEditOptionHTML(pool, predicate, selectedId, includePlaceholder) {
+  const cards = poolCards(pool).filter(
+    c => c.rarity !== 'ex' && predicate(c),
+  );
+  const byType = {};
+  for (const c of cards) (byType[c.type] = byType[c.type] || []).push(c);
+  let html = includePlaceholder
+    ? '<option value="">➕ 添加漏识别的卡…</option>'
+    : '';
+  for (const t of poolTypes(pool)) {
+    if (!byType[t]) continue;
+    html += `<optgroup label="${t}">`;
+    for (const c of byType[t]) {
+      html += `<option value="${c.id}"${c.id === selectedId ? ' selected' : ''}>${c.id.toUpperCase()} ${c.name}</option>`;
+    }
+    html += '</optgroup>';
+  }
+  return html;
+}
 function renderImgEditBody() {
   const r = imgResults[imgEditIdx];
   if (!r) return;
   const body = document.getElementById('imgEditBody');
-  const entries = Object.entries(r.counts || {}).filter(([, c]) => c > 0);
-  if (entries.length === 0) {
-    body.innerHTML =
-      '<div style="text-align:center;color:var(--brown-200);padding:20px;">该图未识别到卡号</div>';
-    return;
+  const counts = r.counts || {};
+  // 按「识别顺序」排序：r.order 中的 id 按其顺序，其余（手动添加/换号新卡）排末尾
+  if (!r.order) r.order = [];
+  const ordered = r.order.filter(id => counts[id] > 0);
+  for (const id of Object.keys(counts)) {
+    if (counts[id] > 0 && !ordered.includes(id)) ordered.push(id);
   }
-  body.innerHTML = entries
-    .map(([id, cnt]) => {
-      const card = cardByID(r.pool, id);
-      const name = card ? card.name : '?';
-      const idText = id.toUpperCase();
-      return `<div class="img-edit-cell">
-      <span class="img-edit-id">${idText}</span>
-      <span class="img-edit-name">${name}</span>
+  let html = '';
+  if (ordered.length === 0) {
+    html +=
+      '<div style="text-align:center;color:var(--brown-200);padding:14px;">该图未识别到卡号，可在下方手动添加</div>';
+  }
+  // 已识别/已添加的卡：可改卡号 + 调张数
+  for (const id of ordered) {
+    const cnt = counts[id];
+    const opts = imgEditOptionHTML(r.pool, () => true, id, false);
+    html += `<div class="img-edit-cell">
+      <select class="img-edit-select" onchange="changeImgCard('${id}', this.value)">${opts}</select>
       <button class="ocr-adj-btn" onclick="adjustImgCard('${id}', -1)">−</button>
       <span class="img-edit-cnt">${cnt}</span>
       <button class="ocr-adj-btn" onclick="adjustImgCard('${id}', 1)">+</button>
     </div>`;
-    })
-    .join('');
+  }
+  // 添加漏识别的卡（已存在的卡不在候选中）
+  const presentIds = new Set(ordered);
+  const addOpts = imgEditOptionHTML(
+    r.pool,
+    c => !presentIds.has(c.id),
+    null,
+    true,
+  );
+  if (addOpts) {
+    html += `<div class="img-edit-cell img-edit-add">
+      <select class="img-edit-select" onchange="addImgCard(this.value)">${addOpts}</select>
+    </div>`;
+  }
+  body.innerHTML = html;
+}
+// 维护识别顺序：添加 id 到末尾（已存在则不动）
+function imgEditOrderAdd(r, id) {
+  if (!r.order) r.order = [];
+  if (!r.order.includes(id)) r.order.push(id);
+}
+// 维护识别顺序：移除 id
+function imgEditOrderRemove(r, id) {
+  if (!r.order) return;
+  r.order = r.order.filter(x => x !== id);
 }
 function adjustImgCard(id, delta) {
   const r = imgResults[imgEditIdx];
   if (!r) return;
   const cur = r.counts[id] || 0;
   r.counts[id] = Math.max(0, cur + delta);
-  if (r.counts[id] === 0) delete r.counts[id];
+  if (r.counts[id] === 0) {
+    delete r.counts[id];
+    imgEditOrderRemove(r, id);
+  }
+  r.detected = Object.values(r.counts).reduce((s, c) => s + c, 0);
+  updateImgEditModal();
+}
+// 改卡号：把旧 id 的张数迁移到新 id（若新 id 已存在则合并）
+function changeImgCard(oldId, newId) {
+  const r = imgResults[imgEditIdx];
+  if (!r || !newId || oldId === newId) return;
+  const cnt = r.counts[oldId] || 0;
+  delete r.counts[oldId];
+  imgEditOrderRemove(r, oldId);
+  r.counts[newId] = (r.counts[newId] || 0) + cnt;
+  imgEditOrderAdd(r, newId);
+  r.detected = Object.values(r.counts).reduce((s, c) => s + c, 0);
+  updateImgEditModal();
+}
+// 添加漏识别的卡（默认 +1，若已存在则累加）
+function addImgCard(newId) {
+  const r = imgResults[imgEditIdx];
+  if (!r || !newId) return;
+  r.counts[newId] = (r.counts[newId] || 0) + 1;
+  imgEditOrderAdd(r, newId);
   r.detected = Object.values(r.counts).reduce((s, c) => s + c, 0);
   updateImgEditModal();
 }

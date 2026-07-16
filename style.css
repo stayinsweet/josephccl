@@ -503,6 +503,9 @@ html, body {
 .img-edit-id { font-size: 14px; font-weight: 800; color: var(--brown-900); min-width: 40px; text-transform: uppercase; }
 .img-edit-name { font-size: 12px; color: var(--brown-200); flex: 1; }
 .img-edit-cnt { min-width: 20px; text-align: center; font-size: 16px; font-weight: 800; color: var(--orange-600); }
+.img-edit-select { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--brown-900); background: #fff; border: 1px solid var(--orange-200); border-radius: 8px; padding: 6px 8px; font-family: inherit; }
+.img-edit-select:focus { outline: none; border-color: var(--orange-600); }
+.img-edit-add { background: rgba(255,255,255,0.5); border: 1px dashed var(--orange-200); }
 .ocr-group-title { font-size: 11px; font-weight: 600; color: var(--brown-200); margin: 10px 0 6px; }
 .ocr-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 4px; }
 .ocr-cell {
