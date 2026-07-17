@@ -180,8 +180,10 @@
   <div class="modal-sheet">
     <button class="modal-close" onclick="closeModal()">✕</button>
     <div class="modal-handle"></div>
-    <div class="modal-card-preview">
+    <div class="modal-card-preview" id="modalCardPreview">
+      <button class="modal-nav prev" id="modalPrev" onclick="event.stopPropagation();switchModalCard(-1)">‹</button>
       <div class="modal-face front" id="modalFront"><span id="modalFrontPH">🃏</span><img id="modalFrontImg" src="" style="display:none;"></div>
+      <button class="modal-nav next" id="modalNext" onclick="event.stopPropagation();switchModalCard(1)">›</button>
     </div>
     <div class="modal-info">
       <div class="modal-cid" id="modalCid">pr1</div>

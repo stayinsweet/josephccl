@@ -743,6 +743,100 @@ function renderPanels() {
 }
 
 // ==================== REWARD POOL (奖励卡池) ====================
+// 构建当前视图所有奖励卡列表（与 renderRewardPool 的 cell onclick 参数一致）
+// 顺序：个人满赠 → 全员满赠 → 限时礼 → 宣传礼；用于详情页左右切换
+function buildRewardCards() {
+  const list = [];
+  if (isMergedView()) {
+    const cat = mergedUnlockedByCategory();
+    PERSONAL_BONUS.forEach(m => {
+      const tierLabel = m.pool
+        ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}池${m.draws}抽`
+        : `${m.draws}抽`;
+      m.rewards.forEach(name => {
+        list.push({
+          name,
+          source: '个人满赠',
+          tier: m.note ? `${tierLabel} · ${m.note}` : tierLabel,
+          unlocked: cat.personal.has(name),
+        });
+      });
+    });
+    GLOBAL_BONUS.forEach(m => {
+      list.push({
+        name: m.card,
+        source: '全员满赠',
+        tier: fmtWan(m.draws) + '抽',
+        unlocked: cat.global.has(m.card),
+      });
+    });
+    ['限时卡1', '限时卡2', '限时卡3'].forEach((name, i) => {
+      list.push({
+        name,
+        source: '限时礼',
+        tier: i < 2 ? '0-2h / 3-6h' : '0-2h / 7-24h',
+        unlocked: cat.limited.has(name),
+      });
+    });
+    list.push({
+      name: '宣传卡',
+      source: '宣传礼',
+      tier: '达标+有记录',
+      unlocked: cat.promo.has('宣传卡'),
+    });
+    return list;
+  }
+  // 单账号视图
+  const total = totalDraws();
+  PERSONAL_BONUS.forEach(m => {
+    const unlocked = personalTierUnlocked(m);
+    const tierLabel = m.pool
+      ? `${m.pool === 'xiari' ? '夏日' : '橘暖'}池${m.draws}抽`
+      : `${m.draws}抽`;
+    m.rewards.forEach(name => {
+      if (m.stack) {
+        const cnt = Math.floor(total / m.draws);
+        list.push({
+          name: cnt > 0 ? `${name} ×${cnt}` : name,
+          source: '个人满赠',
+          tier: m.note || tierLabel,
+          unlocked: cnt > 0,
+        });
+      } else {
+        list.push({
+          name,
+          source: '个人满赠',
+          tier: m.note ? `${tierLabel} · ${m.note}` : tierLabel,
+          unlocked,
+        });
+      }
+    });
+  });
+  const personalEligible = total >= GLOBAL_PERSONAL_MIN;
+  GLOBAL_BONUS.forEach(m => {
+    list.push({
+      name: m.card,
+      source: '全员满赠',
+      tier: fmtWan(m.draws) + '抽',
+      unlocked: GLOBAL_TOTAL_DRAWS >= m.draws && personalEligible,
+    });
+  });
+  ['限时卡1', '限时卡2', '限时卡3'].forEach((name, i) => {
+    list.push({
+      name,
+      source: '限时礼',
+      tier: i < 2 ? '0-2h / 3-6h' : '0-2h / 7-24h',
+      unlocked: limitedUnlocked(name),
+    });
+  });
+  list.push({
+    name: '宣传卡',
+    source: '宣传礼',
+    tier: '达标+有记录',
+    unlocked: promoUnlocked(),
+  });
+  return list;
+}
 function renderRewardPool() {
   const panel = document.getElementById('rewardPool');
   if (!panel) return;
@@ -1436,6 +1530,10 @@ function renderCollection() {
 // ==================== MODAL ====================
 function openModal(id) {
   modalCard = id;
+  modalKind = 'card';
+  // 构建当前卡池可切换列表（含 ex），定位索引，供左右滑动用
+  modalCardList = poolCards(currentPool).map(c => c.id);
+  modalCardIdx = modalCardList.indexOf(id);
   const c = cardCounts[currentPool] || {};
   const card = cardByID(currentPool, id);
   if (!card) return;
@@ -1473,7 +1571,45 @@ function openModal(id) {
     document.getElementById('modalFrontPH').textContent =
       card.rarity === 'ex' ? '🎁' : RARITY_INFO[card.rarity].icon || '🃏';
   }
+  updateModalNav();
   document.getElementById('cardModal').style.display = 'flex';
+}
+// 详情页左右切换前后卡片（按当前卡池完整顺序，含 ex）
+let modalCardList = [];
+let modalCardIdx = -1;
+// 当前详情页类型：'card'=普通卡池卡，'reward'=奖励卡
+let modalKind = 'card';
+// 奖励卡切换列表：[{name, source, tier, unlocked}]，按个人→全员→限时→宣传顺序
+let rewardModalList = [];
+let rewardModalIdx = -1;
+
+function switchModalCard(delta) {
+  if (modalKind === 'reward') {
+    if (rewardModalList.length === 0) return;
+    let n = rewardModalIdx + delta;
+    if (n < 0) n = rewardModalList.length - 1;
+    if (n >= rewardModalList.length) n = 0;
+    if (n === rewardModalIdx) return;
+    const r = rewardModalList[n];
+    openRewardModal(r.name, r.source, r.tier, r.unlocked);
+    return;
+  }
+  if (modalCardList.length === 0) return;
+  let n = modalCardIdx + delta;
+  // 循环切换：到头跳到尾、到尾跳到头
+  if (n < 0) n = modalCardList.length - 1;
+  if (n >= modalCardList.length) n = 0;
+  if (n === modalCardIdx) return;
+  openModal(modalCardList[n]);
+}
+// 刷新左右箭头显隐（列表≤1 时隐藏）
+function updateModalNav() {
+  const prev = document.getElementById('modalPrev');
+  const next = document.getElementById('modalNext');
+  const len = modalKind === 'reward' ? rewardModalList.length : modalCardList.length;
+  const multi = len > 1;
+  if (prev) prev.style.display = multi ? '' : 'none';
+  if (next) next.style.display = multi ? '' : 'none';
 }
 function closeModal() {
   document.getElementById('cardModal').style.display = 'none';
@@ -1482,6 +1618,13 @@ function closeModal() {
 
 // 奖励卡详情（复用 cardModal，结构与双卡池一致）
 function openRewardModal(name, source, tier, unlocked) {
+  modalKind = 'reward';
+  // 构建当前视图奖励卡切换列表，按 source+name 定位索引
+  rewardModalList = buildRewardCards();
+  rewardModalIdx = rewardModalList.findIndex(
+    r => r.source === source && r.name === name,
+  );
+
   document.getElementById('modalCid').textContent = name;
   document.getElementById('modalName').textContent = source;
   document.getElementById('modalRarity').textContent = unlocked
@@ -1514,6 +1657,7 @@ function openRewardModal(name, source, tier, unlocked) {
     ph.classList.add('locked-emoji-ph');
     ph.style.display = 'flex';
   }
+  updateModalNav();
   document.getElementById('cardModal').style.display = 'flex';
 }
 
@@ -3393,6 +3537,65 @@ document.addEventListener('click', e => {
   const menu = document.getElementById('groupMenu');
   if (menu && !menu.contains(e.target)) closeGroupMenu();
 });
+
+// 详情页左右滑动切换前后卡片（触摸 + 鼠标拖拽 + 键盘）
+(function initModalSwipe() {
+  const preview = document.getElementById('modalCardPreview');
+  if (!preview) return;
+  let startX = 0,
+    startY = 0,
+    dragging = false,
+    moved = false;
+
+  function getXY(e) {
+    if (e.touches && e.touches[0])
+      return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+  }
+  function start(e) {
+    const p = getXY(e);
+    startX = p.x;
+    startY = p.y;
+    dragging = true;
+    moved = false;
+  }
+  function move(e) {
+    if (!dragging) return;
+    const p = getXY(e);
+    if (Math.abs(p.x - startX) > 8 || Math.abs(p.y - startY) > 8) moved = true;
+    // 触摸滑动时阻止页面滚动
+    if (moved && e.cancelable) e.preventDefault();
+  }
+  function end(e) {
+    if (!dragging) return;
+    dragging = false;
+    if (!moved) return;
+    // 用变化的触摸点；touchend 无 touches，用 changedTouches
+    let endX = startX;
+    if (e.changedTouches && e.changedTouches[0]) endX = e.changedTouches[0].clientX;
+    else if (typeof e.clientX === 'number') endX = e.clientX;
+    const dx = endX - startX;
+    if (Math.abs(dx) > 40) {
+      // 左滑(dx<0)→下一张；右滑(dx>0)→上一张
+      switchModalCard(dx < 0 ? 1 : -1);
+    }
+  }
+  preview.addEventListener('touchstart', start, { passive: true });
+  preview.addEventListener('touchmove', move, { passive: false });
+  preview.addEventListener('touchend', end);
+  preview.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+
+  // 键盘左右键切换（详情页打开时）
+  document.addEventListener('keydown', e => {
+    const modal = document.getElementById('cardModal');
+    if (!modal || modal.style.display === 'none') return;
+    if (modalCardList.length === 0) return;
+    if (e.key === 'ArrowLeft') switchModalCard(-1);
+    else if (e.key === 'ArrowRight') switchModalCard(1);
+  });
+})();
 
 // 关闭悬浮抽奖入口
 function closeFloatDraw(e) {
