@@ -212,7 +212,7 @@ const GLOBAL_BONUS = [
   { draws: 210000, card: '特典卡7' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 167002;
+const GLOBAL_TOTAL_DRAWS = 180033;
 // 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
@@ -1606,7 +1606,8 @@ function switchModalCard(delta) {
 function updateModalNav() {
   const prev = document.getElementById('modalPrev');
   const next = document.getElementById('modalNext');
-  const len = modalKind === 'reward' ? rewardModalList.length : modalCardList.length;
+  const len =
+    modalKind === 'reward' ? rewardModalList.length : modalCardList.length;
   const multi = len > 1;
   if (prev) prev.style.display = multi ? '' : 'none';
   if (next) next.style.display = multi ? '' : 'none';
@@ -3572,7 +3573,8 @@ document.addEventListener('click', e => {
     if (!moved) return;
     // 用变化的触摸点；touchend 无 touches，用 changedTouches
     let endX = startX;
-    if (e.changedTouches && e.changedTouches[0]) endX = e.changedTouches[0].clientX;
+    if (e.changedTouches && e.changedTouches[0])
+      endX = e.changedTouches[0].clientX;
     else if (typeof e.clientX === 'number') endX = e.clientX;
     const dx = endX - startX;
     if (Math.abs(dx) > 40) {
