@@ -1,14 +1,326 @@
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Vite + React + TS</title>
-	</head>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="joseph的抽抽乐">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23FF8C42' width='100' height='100' rx='20'/><text x='50' y='65' text-anchor='middle' fill='white' font-size='50' font-family='sans-serif'>🎴</text></svg>">
+<title>joseph的抽抽乐</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-	<body>
-		<div id="root"></div>
-		<script type="module" src="/src/react-app/main.tsx"></script>
-	</body>
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-title">
+      <h1>Joseph的抽抽乐</h1>
+      <div class="header-subtitle">——🍒奇妙浆果园</div>
+    </div>
+    <div class="header-btns">
+      <button class="header-btn account-switcher" id="accountSwitcherBtn" onclick="openAccountModal()">
+        <span id="accountSwitcherLabel">默认账号</span> <span class="caret">▾</span>
+      </button>
+      <button class="header-btn" onclick="exportData()">导出</button>
+      <button class="header-btn" onclick="importData()">导入</button>
+      <button class="header-btn danger" onclick="clearAllData()">清空</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="content" id="mainContent">
+
+    <!-- Tab 1: 我的收藏 -->
+    <div class="tab-page active" id="tab-collection">
+      <!-- 总统计板块 -->
+      <div class="panel" id="overviewPanel"></div>
+
+      <!-- 满赠进度（个人 + 全员 同行） -->
+      <div class="panel" id="bonusPanel"></div>
+
+      <!-- 单卡池区：页签 + 计数 + 卡牌网格 -->
+      <div class="pool-section">
+        <!-- Pool Bar: 池子页签(左) + 分组切换图标(右) -->
+        <div class="pool-bar">
+          <div class="pool-tabs">
+            <button class="pool-tab active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
+            <button class="pool-tab" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
+          </div>
+          <div class="group-menu" id="groupMenu" style="display:none;">
+            <button class="group-icon-btn" id="groupIconBtn" onclick="toggleGroupMenu(event)" title="切换分组方式">
+              <svg class="group-icon-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></svg>
+              <span id="groupIconLabel">卡牌类型</span>
+            </button>
+            <div class="group-dropdown" id="groupDropdown">
+              <div class="group-option active" data-group="type" onclick="setGroupMode('type')">🏷️ 按卡牌类型</div>
+              <div class="group-option" data-group="rarity" onclick="setGroupMode('rarity')">📊 按稀有度</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-row" id="statsRow"></div>
+
+        <div id="collectionGrid"></div>
+      </div>
+
+      <!-- 奖励卡池（个人满赠 + 全员满赠 解锁的卡片，不可手动加减） -->
+      <div class="panel" id="rewardPool"></div>
+    </div>
+
+    <!-- Tab 2: 录入（截图识别 + 手动输入 子页签） -->
+    <div class="tab-page" id="tab-entry">
+      <div class="purge-bar">
+        <button class="purge-btn" id="purgeSelectBtn" onclick="togglePurgeMode()">选择一键保留数据</button>
+        <button class="purge-btn primary" id="purgeExportBtn" onclick="exportPurgeData()" disabled>导出一键保留数据<span class="purge-badge" id="purgeBadge"></span></button>
+      </div>
+      <div class="purge-quick" id="purgeQuick" style="display:none;">
+        <div class="purge-quick-title">⚡ 快捷操作</div>
+        <div class="purge-quick-row">
+          <span class="purge-quick-label">所有卡面一键保留</span>
+          <input type="number" class="purge-quick-input" id="purgeQuickInput" value="1" min="0" max="99">
+          <span class="purge-quick-label">张</span>
+          <button class="purge-quick-apply" onclick="applyPurgeQuick()">应用</button>
+        </div>
+      </div>
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-sub="input" onclick="switchSubTab('input')">🔢 手动输入</button>
+        <button class="sub-tab" data-sub="ocr" onclick="switchSubTab('ocr')">📷 截图识别</button>
+      </div>
+
+      <div class="sub-page active" id="sub-input">
+        <div class="entry-section">
+          <div class="pool-bar entry-pool-bar">
+            <div class="pool-tabs" id="entryPoolTabs"></div>
+          </div>
+          <div id="entryGrid"></div>
+        </div>
+        <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="undoLast()">↩ 撤销上一次</button>
+      </div>
+
+      <div class="sub-page" id="sub-ocr">
+        <div style="text-align:center;font-size:13px;color:var(--brown-200);margin-bottom:12px;">📸 可一次选多张截图，依次识别后结果累加</div>
+        <input type="file" id="screenshotInput" accept="image/*" multiple onchange="handleScreenshots(event)">
+        <div class="upload-zone" onclick="document.getElementById('screenshotInput').click()" id="uploadZone">
+          <div class="icon">📷</div><div class="text">点击上传截图（支持多选）</div><div class="hint">拍照或从相册批量选择 · 结果自动累加</div>
+        </div>
+        <div class="upload-preview" id="uploadPreview">
+          <div class="preview-carousel">
+            <button class="preview-nav prev" id="previewPrev" onclick="switchPreview(-1)">‹</button>
+            <img id="previewImg" src="" alt="预览">
+            <button class="preview-nav next" id="previewNext" onclick="switchPreview(1)">›</button>
+            <span class="preview-index" id="previewIndex"></span>
+          </div>
+          <div class="ocr-result">
+            <div class="ocr-title" id="ocrStatus">🤖 识别到的卡号（点击可剔除误识别）：</div>
+            <div class="ocr-loading" id="ocrLoading">
+              <div style="font-size:28px;animation:pulse 1s infinite;">🔍</div>
+              <div style="font-size:13px;color:var(--brown-200);margin-top:6px;">正在识别截图中的卡号...</div>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;">
+              <button class="btn btn-sm btn-outline" onclick="selectAllOCR()">✅ 全选</button>
+              <button class="btn btn-sm btn-outline" onclick="deselectAllOCR()">✕ 清空</button>
+              <span id="ocrExpectedHint" style="font-size:11px;color:var(--brown-200);margin-left:auto;"></span>
+            </div>
+            <div id="ocrWarnings"></div>
+            <div class="ocr-nums" id="ocrNumbers"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-outline" onclick="clearOCR()">✕ 取消</button>
+            <button class="btn btn-primary" onclick="confirmOCR()">✅ 确认添加 (<span id="ocrCount">0</span>张)</button>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding:14px;background:var(--orange-50);border-radius:12px;font-size:12px;color:var(--brown-200);line-height:1.8;">
+          <div style="font-weight:600;color:var(--brown-800);margin-bottom:4px;">💡 截图技巧</div>
+          • 可一次选择多张截图，依次识别后结果累加<br>• 卡号格式：PR1、R3、SR2 等<br>• 识别结果每张卡有 ± 按钮调整数量<br>• 右侧提示「与奖品位一致」即可放心确认
+          <div style="margin-top:10px;font-weight:600;color:var(--brown-800);margin-bottom:6px;">📷 示例截图</div>
+          <img src="images/example.jpg" alt="示例截图" style="width:100%;border-radius:10px;border:1px solid var(--orange-200);">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Tab 4: 记录 -->
+    <div class="tab-page" id="tab-history">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <span style="font-weight:700;font-size:16px;">📝 抽卡记录</span>
+        <button class="btn btn-sm btn-outline" onclick="clearHistory()">🗑 清空</button>
+      </div>
+      <div id="historyList">
+        <div style="text-align:center;padding:40px;color:var(--brown-200);">🃏 还没有抽卡记录</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Tab Bar -->
+  <nav class="tab-bar">
+    <button class="tab-item active" data-tab="collection" onclick="switchTab('collection')">
+      <span class="tab-icon">📊</span>我的收藏
+    </button>
+    <button class="tab-item" data-tab="entry" onclick="switchTab('entry')">
+      <span class="tab-icon">✍️</span>录入
+    </button>
+    <button class="tab-item" data-tab="history" onclick="switchTab('history')">
+      <span class="tab-icon">📝</span>记录
+    </button>
+  </nav>
+</div>
+
+<!-- 悬浮抽奖入口（可拖动） -->
+<div class="float-draw" id="floatDraw" data-href="https://weidian.com/?userid=1372238443&p=iphone&wfr=BuyercopyURL&share_relation=e6570deea04fcace_1654664813_1">
+  <button class="float-draw-close" id="floatDrawClose" onclick="closeFloatDraw(event)">✕</button>
+  <div class="float-draw-circle"></div>
+  <span class="float-draw-text">去抽一发</span>
+</div>
+
+<!-- Card Detail Modal -->
+<div class="modal-overlay" id="cardModal" style="display:none;" onclick="if(event.target===this)closeModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="modal-card-preview" id="modalCardPreview">
+      <button class="modal-nav prev" id="modalPrev" onclick="event.stopPropagation();switchModalCard(-1)">‹</button>
+      <div class="modal-face front" id="modalFront"><span id="modalFrontPH">🃏</span><img id="modalFrontImg" src="" style="display:none;"></div>
+      <button class="modal-nav next" id="modalNext" onclick="event.stopPropagation();switchModalCard(1)">›</button>
+    </div>
+    <div class="modal-info">
+      <div class="modal-cid" id="modalCid">pr1</div>
+      <div class="modal-name" id="modalName">卡名</div>
+      <div class="modal-rarity" id="modalRarity">PR</div>
+      <div class="modal-count-line" id="modalCountLine">持有 <span id="modalCount">0</span> 张</div>
+    </div>
+  </div>
+</div>
+
+<!-- 满赠详情 Modal -->
+<div class="modal-overlay" id="bonusModal" style="display:none;" onclick="if(event.target===this)closeBonusModal()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="bonusModalTitle">满赠详情</div>
+    <div id="bonusModalBody"></div>
+    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeBonusModal()">关闭</button>
+  </div>
+</div>
+
+<!-- 额外奖励确认 Modal（限时礼 / 宣传礼） -->
+<div class="modal-overlay" id="extraModal" style="display:none;" onclick="if(event.target===this)closeExtraModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeExtraModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="extraModalTitle"></div>
+    <div id="extraModalBody"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmExtraModal()">✅ 确认</button>
+  </div>
+</div>
+
+<!-- 单图编辑 Modal -->
+<div class="modal-overlay" id="imgEditModal" style="display:none;" onclick="if(event.target===this)document.getElementById('imgEditModal').style.display='none'">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="document.getElementById('imgEditModal').style.display='none'">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="imgEditTitle">识别结果</div>
+    <div class="img-edit-preview"><img id="imgEditImg" src="" alt="截图"></div>
+    <div id="imgEditBody"></div>
+    <div class="img-edit-nav" id="imgEditNav"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmImgEdit()">✅ 确认更新</button>
+  </div>
+</div>
+
+<!-- 导入数据 Modal（上传 / 粘贴） -->
+<div class="modal-overlay" id="importModal" style="display:none;" onclick="if(event.target===this)closeImportModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeImportModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title">导入数据</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="sub-tab active" id="importTabFile" onclick="switchImportTab('file')">📁 上传文件</button>
+      <button class="sub-tab" id="importTabPaste" onclick="switchImportTab('paste')">📋 粘贴文本</button>
+    </div>
+    <div id="importFileArea">
+      <button class="btn btn-outline" style="width:100%;" onclick="document.getElementById('importFileInput').click()">选择 JSON 文件</button>
+      <input type="file" id="importFileInput" accept=".json,application/json" style="display:none;" onchange="handleImportFile(event)">
+    </div>
+    <div id="importPasteArea" style="display:none;">
+      <textarea id="importPasteText" class="import-textarea" placeholder="粘贴备份的 JSON 文本..."></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="confirmImportPaste()">✅ 导入粘贴数据</button>
+  </div>
+</div>
+
+<!-- 存储提醒 Modal -->
+<div class="modal-overlay" id="noticeModal" style="display:none;">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title">⚠️ 重要提醒</div>
+    <div class="notice-body">
+      <p>本应用的数据<strong>存储在浏览器本地</strong>，<strong>清除浏览器缓存/数据会丢失全部记录</strong>！</p>
+      <p>💡 建议定期使用右上角功能备份：</p>
+      <ul>
+        <li><strong>导出</strong>：把所有数据生成 JSON，可复制保存到备忘录/文件。</li>
+        <li><strong>导入</strong>：支持上传文件或粘贴 JSON 恢复数据。</li>
+      </ul>
+      <p>换手机或清缓存前，请务必先<strong>导出</strong>备份！</p>
+    </div>
+    <div class="notice-update">
+      <div class="notice-update-head">🆕 更新信息 <span class="notice-update-ver" id="noticeVer"></span></div>
+      <ul class="notice-update-list" id="noticeUpdateList"></ul>
+    </div>
+    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeNotice(false)">我知道了</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="closeNotice(true)">下次不再提醒</button>
+  </div>
+</div>
+
+<!-- 通用确认弹窗 -->
+<div class="modal-overlay" id="confirmModal" style="display:none;" onclick="if(event.target===this)closeConfirmModal(false)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="confirmTitle">提示</div>
+    <div class="confirm-body" id="confirmBody"></div>
+    <div class="confirm-actions" id="confirmActions"></div>
+  </div>
+</div>
+
+<!-- 总览 Modal（拥有 / 未拥有 页签） -->
+<div class="modal-overlay" id="overviewModal" style="display:none;" onclick="if(event.target===this)closeOverviewModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeOverviewModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="overview-tabs">
+      <button class="overview-tab active" data-otab="owned" onclick="switchOvTab('owned')">✅ 拥有</button>
+      <button class="overview-tab" data-otab="missing" onclick="switchOvTab('missing')">🔒 未拥有</button>
+    </div>
+    <div id="overviewBody"></div>
+  </div>
+</div>
+
+<!-- 账号管理 Modal -->
+<div class="modal-overlay" id="accountModal" style="display:none;" onclick="if(event.target===this)closeAccountModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeAccountModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title">账号管理</div>
+    <div id="accountModalBody"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="addAccount()">➕ 添加新账号</button>
+  </div>
+</div>
+
+<!-- 文本输入 Modal（重命名/新建账号）-->
+<div class="modal-overlay" id="promptModal" style="display:none;" onclick="if(event.target===this)closePromptModal(null)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="promptTitle">输入</div>
+    <input type="text" id="promptInput" class="import-textarea" style="margin:8px 0;">
+    <div class="confirm-actions">
+      <button class="btn btn-outline" style="flex:1;" onclick="closePromptModal(null)">取消</button>
+      <button class="btn btn-primary" style="flex:1;" onclick="closePromptModal(document.getElementById('promptInput').value)">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
 </html>
