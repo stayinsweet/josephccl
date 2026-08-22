@@ -42,6 +42,18 @@ const POOLS = {
       安热沙防晒: '防晒',
     },
   },
+  // 小卡池：仅随手机号库存同步展示，不参与录入，也不参与任何满赠叠加
+  xiaoka: {
+    name: '🎴 小卡池',
+    imgDir: 'images/小卡池',
+    ranges: [
+      ['吴老狗', 'ssr', 1, 3],
+      ['日常卡', 'ssr', 4, 8],
+      ['吴老狗', 'pr', 1, 2],
+    ],
+    specials: [],
+    specialImgs: {},
+  },
 };
 
 const RARITY_INFO = {
@@ -60,12 +72,15 @@ const RARITY_ORDER = ['r', 'pr', 'sr', 'ssr', 'sp', 'ur', 'hr', 'ex'];
 
 // 缓存：每池的卡牌数组 / id 列表 / 稀有度顺序 / 卡牌类型顺序
 const _poolCardsCache = {};
-// 橘暖池 png 扩展名的卡（其余编号卡为 jpg）
-const PNG_IDS = new Set(['r10', 'r11', 'r12', 'r13']);
-// 编号卡图片路径：两池统一小写（橘暖池 r10-14 为 png 其余 jpg）
+// png 扩展名的编号卡（按池区分，其余编号卡为 jpg）
+const POOL_PNG_IDS = {
+  junuan: new Set(['r10', 'r11', 'r12', 'r13']),
+  xiaoka: new Set(['ssr4', 'ssr5', 'ssr6', 'ssr7', 'ssr8']),
+};
+// 编号卡图片路径：统一小写（橘暖池 r10-13、小卡池 ssr4-8 为 png 其余 jpg）
 function numberedImgPath(pool, id) {
   const dir = POOLS[pool].imgDir;
-  const ext = PNG_IDS.has(id) ? 'png' : 'jpg';
+  const ext = POOL_PNG_IDS[pool] && POOL_PNG_IDS[pool].has(id) ? 'png' : 'jpg';
   return `${dir}/${id}.${ext}`;
 }
 // 特典卡图片路径
@@ -131,10 +146,43 @@ function maxNumForRarity(pool, rarity) {
   return max;
 }
 
+// ── 卡池角色划分 ────────────────────────────────────────────
+// 全部卡池（含小卡池）：数据结构、账号合并、清空、手机号库存导入按此遍历
+const ALL_POOLS = ['xiari', 'junuan', 'xiaoka'];
+// 参与满赠叠加的池（小卡池不参与任何满赠）：totalDraws 等满赠口径按此遍历
+const BONUS_POOLS = ['xiari', 'junuan'];
+// 参与录入的池（手动输入/截图识别/一键保留网格）：小卡池仅由库存同步，不可录入
+const ENTRY_POOLS = ['xiari', 'junuan'];
+// 一键保留「一键应用 N 张」仅生效的稀有度，其余稀有度保持原张数
+const QUICK_RARITIES = ['r', 'sr', 'ssr', 'pr'];
+// 操作页展示的卡池：手动模式=双池（小卡池不参与录入）；
+// 库存模式=三池（小卡池可见，普通状态只读展示、保留模式可调）；
+// 许愿卡进行中仅双池（每满 300 选 3 的口径不含小卡池）
+function entryPoolsForView() {
+  if (opMode === 'wish') return ENTRY_POOLS;
+  return isStockMode() ? ALL_POOLS : ENTRY_POOLS;
+}
+// 三池空计数模板
+function emptyCounts() {
+  return { xiari: {}, junuan: {}, xiaoka: {} };
+}
+
 // ==================== STATE ====================
-let cardCounts = { xiari: {}, junuan: {} };
+// ── 运行模式开关 ─────────────────────────────────────────────
+// 'stock'  = 真实库存模式：库存仅通过手机号远程同步，录入网格只读，
+//            可变操作集中在「操作菜单」（一键保留 / 使用许愿卡）
+// 'manual' = 手动录入模式：手动 ± / 直填 / 截图 OCR 录入全部开放
+// 模式持久化在 localStorage(ccg_app_mode)，可通过顶栏按钮运行时切换
+// （toggleAppMode），UI 显隐由 applyAppMode() 同步，业务用 isStockMode() 判断。
+let APP_MODE =
+  localStorage.getItem('ccg_app_mode') === 'manual' ? 'manual' : 'stock';
+function isStockMode() {
+  return APP_MODE === 'stock';
+}
+
+let cardCounts = emptyCounts();
 let history = [];
-let cardImages = { xiari: {}, junuan: {} };
+let cardImages = emptyCounts();
 
 // 个人满赠档位 — pool 字段为空=双池合计判定；指定 pool=单池抽数判定
 // TR1=夏日池10抽, TR2=橘暖池10抽；其余按双池合计
@@ -149,15 +197,24 @@ const PERSONAL_BONUS = [
   { draws: 70, rewards: ['TR9'] },
   { draws: 80, rewards: ['TR10'] },
   { draws: 90, rewards: ['TR11'] },
+  { draws: 100, rewards: ['夏日100'], pool: 'xiari' },
+  { draws: 100, rewards: ['橘暖100'], pool: 'junuan' },
   { draws: 120, rewards: ['白瓷卡'] },
   { draws: 150, rewards: ['水敏卡'] },
+  { draws: 150, rewards: ['夏日150'], pool: 'xiari' },
+  { draws: 150, rewards: ['橘暖150'], pool: 'junuan' },
   { draws: 180, rewards: ['仿真cd'] },
+  { draws: 200, rewards: ['夏日200'], pool: 'xiari' },
+  { draws: 200, rewards: ['橘暖200'], pool: 'junuan' },
   { draws: 210, rewards: ['卡套'] },
   { draws: 240, rewards: ['仿真拍立得1'] },
   { draws: 270, rewards: ['仿真拍立得2'] },
   { draws: 300, rewards: ['许愿卡'], note: '可许愿三张，可叠加', stack: true },
 ];
-const PERSONAL_BONUS_TOTAL = 18; // TR1+TR2+TR5+TR6 等
+const PERSONAL_BONUS_TOTAL = PERSONAL_BONUS.reduce(
+  (s, m) => s + m.rewards.length,
+  0,
+); // 奖励卡位按数组自动统计（当前 24），避免加档位后忘更新
 
 // 奖励卡名 → 图片文件名映射（不含扩展名）
 const REWARD_IMGS = {
@@ -187,15 +244,23 @@ const REWARD_IMGS = {
   特典卡5: '特典 5',
   特典卡6: '特典 6',
   特典卡7: '特典 7',
+  特典卡8: '特典 8',
+  特典卡9: '特典 9',
   限时卡1: '限时1',
   限时卡2: '限时2',
   限时卡3: '限时3',
   宣传卡: '宣传',
+  小狗卡: '小狗卡',
+  尖叫之夜: '尖叫之夜卡',
+  蓝柚子: '蓝柚子',
+  绿柚子: '绿柚子',
 };
 function rewardImg(name) {
   const dir = name.startsWith('特典')
     ? '全员满赠'
-    : name.startsWith('限时') || name.startsWith('宣传')
+    : name.startsWith('限时') ||
+        name.startsWith('宣传') ||
+        YUZU_REWARDS.includes(name)
       ? '额外奖励'
       : '个人满赠';
   return `images/${dir}/${REWARD_IMGS[name] || name}.jpg`;
@@ -210,24 +275,33 @@ const GLOBAL_BONUS = [
   { draws: 150000, card: '特典卡5' },
   { draws: 180000, card: '特典卡6' },
   { draws: 210000, card: '特典卡7' },
+  { draws: 230000, card: '特典卡8' },
+  { draws: 250000, card: '特典卡9' },
 ];
 // 全员抽数（代码常量，手动更新）— 全员满赠按此值判定
-const GLOBAL_TOTAL_DRAWS = 213172;
+const GLOBAL_TOTAL_DRAWS = 252299;
 // 个人满赠门槛：全员达标后还需个人双池合计 >= 此值才有资格获取特典卡
 const GLOBAL_PERSONAL_MIN = 10;
 let currentPool = 'xiari';
 let currentTab = 'collection';
 let groupMode = 'type'; // 'rarity' | 'type'
-let ocrCounts = { xiari: {}, junuan: {} }; // OCR检测到的每张卡的数量（分池）
-let ocrSelected = { xiari: {}, junuan: {} }; // 用户调整后的数量（分池）
-let ocrExpectedTotal = 0; // 从奖品编号检测到的本轮总抽数
-let imgResults = []; // 每张图识别明细（全局，供单图编辑用）
 let modalCard = null;
-// 一键保留模式：标记两池卡片「保留」并导出
-let purgeMode = false;
-let purgeSnapshot = null; // 进入模式前的 cardCounts 快照
+// 操作模式：null=普通 / 'purge'=一键保留 / 'wish'=使用许愿卡
+// 两者复用同一套录入网格交互（± / 直填 / 分组进度 / 导出记录）
+let opMode = null;
+let opSnapshot = null; // 进入一键保留前的 cardCounts 快照（退出/导出后恢复）
+let wishCounts = null; // 许愿卡草稿选择（不写入 cardCounts，不影响统计）
+let wishLimit = 0; // 许愿卡可选张数上限（双池每满 300 张可选 3 张）
 // 额外奖励（限时礼 / 宣传礼）用户确认状态
-let extraRewards = { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
+let extraRewards = {
+  限时时段: null,
+  宣传达标: false,
+  宣传下单时间: '',
+  柚子夏日10: false,
+  柚子夏日20: false,
+  柚子橘暖10: false,
+  柚子橘暖20: false,
+};
 
 // 多账号：accounts = { id: {name, cardCounts, history, cardImages, extraRewards} }
 // activeAccountId 为真实 id 或 'all'（合并视图）；accountOrder 为显示顺序
@@ -238,21 +312,48 @@ let accountOrder = [];
 // 空账号数据模板
 function emptyAccountData() {
   return {
-    cardCounts: { xiari: {}, junuan: {} },
+    cardCounts: emptyCounts(),
     history: [],
-    cardImages: { xiari: {}, junuan: {} },
-    extraRewards: { 限时时段: null, 宣传达标: false, 宣传下单时间: '' },
+    cardImages: emptyCounts(),
+    extraRewards: {
+      限时时段: null,
+      宣传达标: false,
+      宣传下单时间: '',
+      柚子夏日10: false,
+      柚子夏日20: false,
+      柚子橘暖10: false,
+      柚子橘暖20: false,
+    },
   };
 }
 // 默认 extraRewards
 function defaultExtraRewards() {
-  return { 限时时段: null, 宣传达标: false, 宣传下单时间: '' };
+  return {
+    限时时段: null,
+    宣传达标: false,
+    宣传下单时间: '',
+    柚子夏日10: false,
+    柚子夏日20: false,
+    柚子橘暖10: false,
+    柚子橘暖20: false,
+  };
 }
 
 // ==================== PERSISTENCE ====================
+// 双模式数据分家：手动/库存各自独立存储，互不共享
+function modeStorageKey(mode) {
+  return mode === 'stock' ? 'ccg2_stock_data' : 'ccg2_data';
+}
 function loadData() {
   try {
-    const d = JSON.parse(localStorage.getItem('ccg2_data') || '{}');
+    // 库存模式首次启动（尚无独立存储）时，以现有 ccg2_data 为底拷贝一份，此后两模式各自独立演化
+    if (APP_MODE === 'stock' && !localStorage.getItem('ccg2_stock_data')) {
+      const legacy = localStorage.getItem('ccg2_data');
+      if (legacy) localStorage.setItem('ccg2_stock_data', legacy);
+    }
+    const d = JSON.parse(
+      localStorage.getItem(modeStorageKey(APP_MODE)) || '{}',
+    );
     if (d.accounts && d.version >= 4) {
       // v4 路径
       accounts = d.accounts;
@@ -269,8 +370,8 @@ function loadData() {
     } else {
       // v3（或更旧）→ 迁移一次：把顶层单用户数据折进 a1
       const acc = emptyAccountData();
-      acc.cardCounts = d.cardCounts || { xiari: {}, junuan: {} };
-      acc.cardImages = d.cardImages || { xiari: {}, junuan: {} };
+      acc.cardCounts = d.cardCounts || emptyCounts();
+      acc.cardImages = d.cardImages || emptyCounts();
       acc.extraRewards = d.extraRewards || defaultExtraRewards();
       // 旧 history 每项回填 accountId
       acc.history = (d.history || []).map(h =>
@@ -286,13 +387,15 @@ function loadData() {
     accountOrder = ['a1'];
     activeAccountId = 'a1';
   }
-  // 按账号清理无效 id（卡池更新后旧 id 如 xiari 的 r9/r10/r11）
+  // 按账号清理无效 id（卡池更新后旧 id 如 xiari 的 r9/r10/r11），并补齐小卡池键
   for (const acc of Object.values(accounts)) {
-    if (!acc.cardCounts) acc.cardCounts = { xiari: {}, junuan: {} };
-    if (!acc.cardImages) acc.cardImages = { xiari: {}, junuan: {} };
+    if (!acc.cardCounts) acc.cardCounts = emptyCounts();
+    if (!acc.cardImages) acc.cardImages = emptyCounts();
     if (!acc.history) acc.history = [];
     if (!acc.extraRewards) acc.extraRewards = defaultExtraRewards();
-    for (const pool of ['xiari', 'junuan']) {
+    for (const pool of ALL_POOLS) {
+      if (!acc.cardCounts[pool]) acc.cardCounts[pool] = {};
+      if (!acc.cardImages[pool]) acc.cardImages[pool] = {};
       const valid = new Set(poolIDs(pool));
       for (const id of Object.keys(acc.cardCounts[pool] || {})) {
         if (!valid.has(id)) delete acc.cardCounts[pool][id];
@@ -316,7 +419,7 @@ function persistActiveAccount() {
 function saveData() {
   persistActiveAccount();
   localStorage.setItem(
-    'ccg2_data',
+    modeStorageKey(APP_MODE),
     JSON.stringify({
       version: 4,
       activeAccountId,
@@ -357,11 +460,11 @@ function loadActiveAccountIntoGlobals() {
 }
 // 计算合并视图的全局克隆（cardCounts 求和 / history 拼接排序 / cardImages 首见 / extraRewards 派生）
 function computeMergedGlobals() {
-  cardCounts = { xiari: {}, junuan: {} };
+  cardCounts = emptyCounts();
   for (const id of accountOrder) {
     const acc = accounts[id];
     if (!acc) continue;
-    for (const pool of ['xiari', 'junuan']) {
+    for (const pool of ALL_POOLS) {
       for (const [cid, cnt] of Object.entries(acc.cardCounts[pool] || {})) {
         cardCounts[pool][cid] = (cardCounts[pool][cid] || 0) + cnt;
       }
@@ -378,11 +481,11 @@ function computeMergedGlobals() {
   all.sort((a, b) => new Date(b.time) - new Date(a.time));
   history = all;
   // cardImages 首见优先
-  cardImages = { xiari: {}, junuan: {} };
+  cardImages = emptyCounts();
   for (const id of accountOrder) {
     const acc = accounts[id];
     if (!acc) continue;
-    for (const pool of ['xiari', 'junuan']) {
+    for (const pool of ALL_POOLS) {
       for (const [cid, img] of Object.entries(acc.cardImages[pool] || {})) {
         if (!cardImages[pool][cid]) cardImages[pool][cid] = img;
       }
@@ -406,7 +509,7 @@ function computeMergedGlobals() {
 // 切换账号（单账号或合并视图）
 function switchAccount(id) {
   if (id !== 'all' && !accounts[id]) return;
-  if (purgeMode) exitPurgeMode(); // purge 快照属上一账号，不可串
+  if (opMode) finishOpMode(); // 操作快照/草稿属上一账号视图，不可串
   activeAccountId = id;
   loadActiveAccountIntoGlobals();
   saveData();
@@ -430,9 +533,10 @@ function cardInfo(id) {
 }
 
 // 双池合计抽数（按下单 id 合并计算，即所有卡的计数总和）
+// 双池合计抽数（满赠口径：小卡池不参与任何满赠叠加）
 function totalDraws() {
   let total = 0;
-  for (const pool of ['xiari', 'junuan']) {
+  for (const pool of BONUS_POOLS) {
     for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
   }
   return total;
@@ -465,6 +569,19 @@ function poolDraws(pool) {
   let n = 0;
   for (const cnt of Object.values(cardCounts[pool] || {})) n += cnt;
   return n;
+}
+// 三池合计张数（含小卡池，不含奖励卡）：一键保留的开启门槛口径
+function grandTotalDraws() {
+  let total = 0;
+  for (const pool of ALL_POOLS) {
+    for (const cnt of Object.values(cardCounts[pool] || {})) total += cnt;
+  }
+  return total;
+}
+// 许愿卡可选张数：双池（不含小卡池）每满 300 张可选 3 张
+// 300→3、600→6、400→3（不足 300 为 0，不开放）
+function wishQuota() {
+  return Math.floor(totalDraws() / 300) * 3;
 }
 // 个人满赠档位是否解锁：单池档位按该池抽数，双池档位按合计
 function personalTierUnlocked(m) {
@@ -527,15 +644,63 @@ function limitedUnlockedCount() {
   if (t === '7-24') return 1;
   return 0;
 }
-// 额外奖励已解锁总数（限时 + 宣传）
+// 柚子限时礼：7.25 当天下单抽卡，用户分四种情况自确认（夏日/橘暖 各 满10/满20）
+const YUZU_REWARDS = ['小狗卡', '尖叫之夜', '蓝柚子', '绿柚子'];
+const YUZU_CARD_TIERS = {
+  小狗卡: '7.25 · 夏日池满10抽',
+  尖叫之夜: '7.25 · 夏日池满20抽',
+  蓝柚子: '7.25 · 橘暖池满10抽',
+  绿柚子: '7.25 · 橘暖池满20抽',
+};
+const YUZU_TIERS = [
+  {
+    key: '柚子夏日10',
+    label: '7.25 夏日池满 10 抽',
+    rewards: ['小狗卡'],
+    rewardText: '小狗卡',
+  },
+  {
+    key: '柚子夏日20',
+    label: '7.25 夏日池满 20 抽',
+    rewards: ['尖叫之夜', '小狗卡'],
+    rewardText: '尖叫之夜 + 小狗卡',
+  },
+  {
+    key: '柚子橘暖10',
+    label: '7.25 橘暖池满 10 抽',
+    rewards: ['蓝柚子'],
+    rewardText: '蓝柚子',
+  },
+  {
+    key: '柚子橘暖20',
+    label: '7.25 橘暖池满 20 抽',
+    rewards: ['蓝柚子', '绿柚子'],
+    rewardText: '蓝柚子 + 绿柚子',
+  },
+];
+// 是否勾选过任一柚子档位
+function yuzuConfirmed() {
+  return YUZU_TIERS.some(t => !!extraRewards[t.key]);
+}
+// 柚子卡是否解锁（对应档位已自确认；共享卡任一含它的档位勾选即解锁）
+function yuzuUnlocked(name) {
+  return YUZU_TIERS.some(t => !!extraRewards[t.key] && t.rewards.includes(name));
+}
+// 柚子限时礼已解锁卡数（0-4）
+function yuzuUnlockedCount() {
+  return YUZU_REWARDS.filter(name => yuzuUnlocked(name)).length;
+}
+// 额外奖励已解锁总数（限时 + 宣传 + 柚子）
 function extraUnlockedCount() {
   if (isMergedView()) {
     const c = mergedUnlockedByCategory();
-    return c.limited.size + c.promo.size;
+    return c.limited.size + c.promo.size + c.yuzu.size;
   }
-  return limitedUnlockedCount() + (promoUnlocked() ? 1 : 0);
+  return (
+    limitedUnlockedCount() + (promoUnlocked() ? 1 : 0) + yuzuUnlockedCount()
+  );
 }
-const EXTRA_TOTAL = 4; // 限时3 + 宣传1
+const EXTRA_TOTAL = 8; // 限时3 + 宣传1 + 柚子4
 
 // ==================== 多账号：按账号计算奖励解锁（纯函数，不碰全局）====================
 function accountTotalDraws(acc) {
@@ -585,7 +750,13 @@ function accountUnlockedByCategory(acc) {
     acc.extraRewards.宣传达标
   )
     promo.add('宣传卡');
-  return { personal, global, limited, promo };
+  // 柚子限时礼：账号自确认的四种档位
+  const yuzu = new Set();
+  for (const t of YUZU_TIERS) {
+    if (acc.extraRewards && acc.extraRewards[t.key])
+      t.rewards.forEach(n => yuzu.add(n));
+  }
+  return { personal, global, limited, promo, yuzu };
 }
 // 合并视图：各账号四类取并集
 function mergedUnlockedByCategory() {
@@ -594,6 +765,7 @@ function mergedUnlockedByCategory() {
     global: new Set(),
     limited: new Set(),
     promo: new Set(),
+    yuzu: new Set(),
   };
   for (const id of accountOrder) {
     const acc = accounts[id];
@@ -605,7 +777,13 @@ function mergedUnlockedByCategory() {
 }
 function mergedUnlockedSet() {
   const c = mergedUnlockedByCategory();
-  return new Set([...c.personal, ...c.global, ...c.limited, ...c.promo]);
+  return new Set([
+    ...c.personal,
+    ...c.global,
+    ...c.limited,
+    ...c.promo,
+    ...c.yuzu,
+  ]);
 }
 // 任一账号该确认字段为真
 function anyAccountExtraConfirmed(field) {
@@ -629,9 +807,9 @@ function switchPool(pool) {
   if (currentTab === 'entry') renderEntry();
 }
 function switchTab(tab) {
-  // 保留模式下切到「我的收藏」或「记录」时，先自动取消保留（恢复原始数量）
-  if (purgeMode && (tab === 'collection' || tab === 'history')) {
-    togglePurgeMode();
+  // 操作模式下切到「我的收藏」或「记录」时，先自动取消（恢复原始数量/丢弃草稿）
+  if (opMode && (tab === 'collection' || tab === 'history')) {
+    finishOpMode();
   }
   currentTab = tab;
   // 切换页面时滚动到顶部
@@ -656,10 +834,22 @@ function switchTab(tab) {
     renderPanels();
   }
   if (tab === 'history') renderHistory();
-  if (tab === 'entry' && currentSubTab === 'input') renderEntry();
+  if (tab === 'entry') {
+    // 当前模式操作页不含该卡池时回落到夏日池（手动模式不含小卡池）
+    if (!entryPoolsForView().includes(currentPool)) {
+      currentPool = 'xiari';
+      document
+        .querySelectorAll('.pool-tab')
+        .forEach(b =>
+          b.classList.toggle('active', b.dataset.pool === currentPool),
+        );
+    }
+    renderOpsBar();
+    if (currentSubTab === 'input') renderEntry();
+  }
 }
 
-// 录入页子页签切换
+// 录入页子页签切换（manual 模式：手动输入 / 截图识别）
 let currentSubTab = 'input';
 function switchSubTab(sub) {
   currentSubTab = sub;
@@ -784,6 +974,14 @@ function buildRewardCards() {
       tier: '达标+有记录',
       unlocked: cat.promo.has('宣传卡'),
     });
+    YUZU_REWARDS.forEach(name =>
+      list.push({
+        name,
+        source: '柚子限时礼',
+        tier: YUZU_CARD_TIERS[name],
+        unlocked: cat.yuzu.has(name),
+      }),
+    );
     return list;
   }
   // 单账号视图
@@ -835,6 +1033,14 @@ function buildRewardCards() {
     tier: '达标+有记录',
     unlocked: promoUnlocked(),
   });
+  YUZU_REWARDS.forEach(name =>
+    list.push({
+      name,
+      source: '柚子限时礼',
+      tier: YUZU_CARD_TIERS[name],
+      unlocked: yuzuUnlocked(name),
+    }),
+  );
   return list;
 }
 function renderRewardPool() {
@@ -927,6 +1133,14 @@ function renderRewardPool() {
   const rUnlocked = promoCards.filter(c => c.unlocked).length;
   const lConfirmed = !!extraRewards.限时时段;
   const rConfirmed = !!extraRewards.宣传达标;
+  // 柚子限时礼
+  const yuzuCards = YUZU_REWARDS.map(name => ({
+    name,
+    tier: YUZU_CARD_TIERS[name],
+    unlocked: yuzuUnlocked(name),
+  }));
+  const yUnlocked = yuzuCards.filter(c => c.unlocked).length;
+  const yConfirmed = yuzuConfirmed();
 
   const renderConfirmGroup = (
     title,
@@ -962,6 +1176,7 @@ function renderRewardPool() {
     ${renderGroup('全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
     ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
     ${renderConfirmGroup('宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
+    ${renderConfirmGroup('柚子限时礼', `${yUnlocked}/4`, yuzuCards, 'rw-yuzu', yConfirmed, 'openYuzuConfirm()')}
   `;
 }
 
@@ -1037,6 +1252,14 @@ function renderRewardPoolMerged(panel) {
   const rUnlocked = cat.promo.size;
   const lConfirmed = anyAccountExtraConfirmed('限时时段');
   const rConfirmed = anyAccountExtraConfirmed('宣传达标');
+  // 柚子限时礼（各账号解锁取并集）
+  const yuzuCards = YUZU_REWARDS.map(name => ({
+    name,
+    tier: YUZU_CARD_TIERS[name],
+    unlocked: cat.yuzu.has(name),
+  }));
+  const yUnlocked = cat.yuzu.size;
+  const yConfirmed = YUZU_TIERS.some(t => anyAccountExtraConfirmed(t.key));
 
   const renderConfirmGroup = (
     title,
@@ -1072,6 +1295,7 @@ function renderRewardPoolMerged(panel) {
     ${renderGroup('全员满赠', `${gUnlocked}/${GLOBAL_BONUS.length}`, globalCards, 'rw-global')}
     ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
     ${renderConfirmGroup('宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
+    ${renderConfirmGroup('柚子限时礼', `${yUnlocked}/4`, yuzuCards, 'rw-yuzu', yConfirmed, 'openYuzuConfirm()')}
   `;
 }
 
@@ -1084,7 +1308,7 @@ function renderOverview() {
   const poolTotal = poolTotalCount();
   const rewardUnlocked =
     personalUnlockedCount() + globalUnlockedCount() + extraUnlockedCount();
-  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length + EXTRA_TOTAL; // 18 + 7 + 4 = 29
+  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length + EXTRA_TOTAL; // 24 + 9 + 8 = 41
 
   const poolPct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
   const rewardPct = Math.round((rewardUnlocked / rewardTotal) * 100);
@@ -1108,7 +1332,7 @@ function renderOverview() {
         <div class="ov-num">${rewardUnlocked}<span class="ov-slash">/${rewardTotal}</span></div>
         <div class="ov-bar-wrap"><div class="ov-bar reward" style="width:${rewardPct}%"></div></div>
         <div class="ov-pct">${rewardPct}%</div>
-        <div class="ov-note">含满赠 + 限时礼 + 宣传礼</div>
+        <div class="ov-note">含满赠 + 限时礼 + 宣传礼 + 柚子礼</div>
       </div>
     </div>
   `;
@@ -1169,6 +1393,15 @@ function overviewCards() {
     owned: promoUnlocked(),
     sub: '宣传礼',
   });
+  // 柚子限时礼
+  YUZU_REWARDS.forEach(name =>
+    list.push({
+      name,
+      img: rewardImg(name),
+      owned: yuzuUnlocked(name),
+      sub: '柚子限时礼',
+    }),
+  );
   return list;
 }
 
@@ -1378,7 +1611,7 @@ function closeBonusModal() {
 }
 
 // ==================== 额外奖励确认（限时礼 / 宣传礼）====================
-let extraModalMode = null; // 'limited' | 'promo'
+let extraModalMode = null; // 'limited' | 'promo' | 'yuzu'
 const LIMITED_TIERS = [
   { key: '0-2', label: '开售 0-2 小时', rewards: '限时卡1、2、3' },
   { key: '3-6', label: '开售 3-6 小时', rewards: '限时卡1、2' },
@@ -1425,6 +1658,27 @@ function openPromoConfirm() {
   document.getElementById('extraModal').style.display = 'flex';
 }
 
+function openYuzuConfirm() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
+  extraModalMode = 'yuzu';
+  const cur = extraRewards;
+  document.getElementById('extraModalTitle').textContent = '柚子限时礼';
+  const opts = YUZU_TIERS.map(
+    (t, i) => `
+    <label class="extra-opt ${cur[t.key] ? 'active' : ''}" data-val="yz${i}">
+      <input type="checkbox" id="yuzuOpt${i}" ${cur[t.key] ? 'checked' : ''}>
+      <div class="extra-opt-main"><div class="extra-opt-label">${t.label}</div><div class="extra-opt-sub">送 ${t.rewardText}</div></div>
+    </label>`,
+  ).join('');
+  document.getElementById('extraModalBody').innerHTML = `
+    <div class="bm-sub">7 月 25 日当天是否分别在夏日池 / 橘暖池抽满对应次数？按实际情况勾选（可多选）：</div>
+    <div class="extra-opts">${opts}</div>`;
+  document.getElementById('extraModal').style.display = 'flex';
+}
+
 function confirmExtraModal() {
   if (isMergedView()) {
     showToast('请先选择具体账号');
@@ -1435,6 +1689,11 @@ function confirmExtraModal() {
     extraRewards.限时时段 = checked ? checked.value : null;
   } else if (extraModalMode === 'promo') {
     extraRewards.宣传达标 = !!document.getElementById('promoDone').checked;
+  } else if (extraModalMode === 'yuzu') {
+    YUZU_TIERS.forEach((t, i) => {
+      const el = document.getElementById('yuzuOpt' + i);
+      extraRewards[t.key] = !!(el && el.checked);
+    });
   }
   saveData();
   closeExtraModal();
@@ -1660,6 +1919,12 @@ function openRewardModal(name, source, tier, unlocked) {
   }
   updateModalNav();
   document.getElementById('cardModal').style.display = 'flex';
+}
+
+// 找到某卡在当前分组模式下所属的 group key（用于局部更新组计数）
+function groupKeyOf(card) {
+  if (groupMode === 'rarity') return card.rarity;
+  return card.rarity === 'ex' ? 'ex' : card.type;
 }
 
 // ==================== SCREENSHOT OCR（中文识别版）====================
@@ -2123,7 +2388,7 @@ function openImgEditModal(idx) {
 function updateImgEditModal() {
   const r = imgResults[imgEditIdx];
   if (!r) return;
-  const pn = r.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
+  const pn = (POOLS[r.pool] && POOLS[r.pool].name) || r.pool;
   document.getElementById('imgEditTitle').innerHTML =
     `第 ${r.idx + 1} 张识别结果 <span style="font-size:11px;color:var(--brown-200);font-weight:500;">${pn} · 识别 ${r.detected}/${r.expected}</span>`;
   // 显示该图图片
@@ -2407,41 +2672,122 @@ function clearOCR() {
   if (hint) hint.innerHTML = '';
 }
 
-// ==================== MANUAL INPUT (录入网格) ====================
-// 一键保留模式：切换标记状态
-function togglePurgeMode() {
-  if (isMergedView() && !purgeMode) {
-    showToast('请先选择具体账号');
+// ==================== 操作菜单（一键保留 / 使用许愿卡） ====================
+// 渲染操作菜单（原「一键保留」菜单）：
+// - 单账号视图（仅 stock 模式展示）：三池总数 ≥ 80 才开放「一键保留」
+// - 总账号（合并）视图：双池（不含小卡池）每满 300 张可选 3 张「许愿卡」
+function renderOpsBar() {
+  const bar = document.getElementById('opsBar');
+  if (!bar) return;
+  if (opMode) {
+    // 操作进行中：取消 + 导出
+    const isWish = opMode === 'wish';
+    bar.innerHTML = `
+      <div class="ops-row">
+        <button class="purge-btn" onclick="toggleOpMode()">取消${isWish ? '许愿卡' : '一键保留'}</button>
+        <button class="purge-btn primary" onclick="exportOpData()">导出${isWish ? '许愿卡' : '一键保留'}数据<span class="purge-badge" id="purgeBadge"></span></button>
+      </div>`;
+    updatePurgeBadge();
     return;
   }
-  purgeMode = !purgeMode;
-  const selectBtn = document.getElementById('purgeSelectBtn');
-  const exportBtn = document.getElementById('purgeExportBtn');
-  if (purgeMode) {
-    // 进入模式：快照当前 cardCounts
-    purgeSnapshot = JSON.parse(JSON.stringify(cardCounts));
-  } else {
-    // 取消模式：恢复 cardCounts 到快照
-    if (purgeSnapshot) {
-      cardCounts = JSON.parse(JSON.stringify(purgeSnapshot));
-      purgeSnapshot = null;
-      saveData();
-      updateStats();
-      renderPanels();
-    }
+  // 一键保留 / 许愿卡均仅真实库存模式提供（手动录入模式不展示操作菜单）
+  if (!isStockMode()) {
+    bar.innerHTML = '';
+    return;
   }
-  if (selectBtn)
-    selectBtn.textContent = purgeMode ? '取消一键保留' : '选择一键保留数据';
-  if (exportBtn) exportBtn.disabled = !purgeMode;
+  if (isMergedView()) {
+    const quota = wishQuota();
+    const total = totalDraws();
+    bar.innerHTML = `
+      <div class="ops-row">
+        <button class="purge-btn" ${quota > 0 ? '' : 'disabled'} onclick="toggleOpMode('wish')">🌟 使用许愿卡</button>
+      </div>
+      <div class="ops-hint">${quota > 0 ? `双池合计 ${total} 张，本次可选 ${quota} 张许愿卡` : `双池合计每满 300 张可选 3 张许愿卡（当前 ${total} 张）`}</div>`;
+  } else {
+    const quota = wishQuota();
+    const tDraws = totalDraws();
+    const wishHint =
+      quota > 0
+        ? `双池合计 ${tDraws} 张，本次可选 ${quota} 张许愿卡`
+        : `双池合计每满 300 张可选 3 张许愿卡（当前 ${tDraws} 张）`;
+    const total = grandTotalDraws();
+    bar.innerHTML = `
+      <div class="ops-row">
+        <button class="purge-btn" ${total >= 80 ? '' : 'disabled'} onclick="toggleOpMode('purge')">✂️ 一键保留</button>
+        <button class="purge-btn" ${quota > 0 ? '' : 'disabled'} onclick="toggleOpMode('wish')">🌟 使用许愿卡</button>
+      </div>
+      <div class="ops-hint">${total >= 80 ? `三池合计 ${total} 张` : `三池合计满 80 张才可一键保留（当前 ${total} 张）`}</div>
+      <div class="ops-hint">${wishHint}</div>`;
+  }
+}
+// 进入/取消操作模式（'purge'=一键保留 / 'wish'=使用许愿卡）
+function toggleOpMode(kind) {
+  if (!opMode) {
+    if (kind === 'purge') {
+      if (!isStockMode()) return; // 一键保留仅真实库存模式提供
+      if (isMergedView()) {
+        showToast('请先选择具体账号');
+        return;
+      }
+      if (grandTotalDraws() < 80) {
+        showToast('⚠️ 三池合计满 80 张才可一键保留');
+        return;
+      }
+      // 进入模式：快照当前 cardCounts，退出/导出后恢复
+      opSnapshot = JSON.parse(JSON.stringify(cardCounts));
+    } else if (kind === 'wish') {
+      if (!isStockMode()) return; // 许愿卡仅真实库存模式提供
+      // 许愿卡：单账号 / 总账号视图均可使用，按当前视图双池合计算配额
+      const quota = wishQuota();
+      if (quota < 1) {
+        showToast('⚠️ 双池合计每满 300 张可选 3 张许愿卡');
+        return;
+      }
+      wishLimit = quota;
+      wishCounts = emptyCounts(); // 草稿从 0 开始选，不写入 cardCounts
+    } else {
+      return;
+    }
+    opMode = kind;
+  } else {
+    // 取消：purge 恢复快照；wish 丢弃草稿
+    finishOpMode();
+    return;
+  }
   const quickEl = document.getElementById('purgeQuick');
-  if (quickEl) quickEl.style.display = purgeMode ? '' : 'none';
-  updatePurgeBadge();
+  if (quickEl) quickEl.style.display = opMode === 'purge' ? '' : 'none';
+  renderOpsBar();
   renderEntry();
 }
-// 一键设置两池所有普通卡为指定张数（保留模式快捷操作）
-// 一键设置两池所有普通卡为指定张数（保留模式快捷操作）
+// 结束操作模式并复位 UI（purge 总是恢复快照：导出也不覆盖原库存）
+function finishOpMode() {
+  if (opMode === 'purge' && opSnapshot) {
+    cardCounts = JSON.parse(JSON.stringify(opSnapshot));
+    opSnapshot = null;
+    saveData();
+    updateStats();
+    renderPanels();
+  }
+  opMode = null;
+  opSnapshot = null;
+  wishCounts = null;
+  wishLimit = 0;
+  const quickEl = document.getElementById('purgeQuick');
+  if (quickEl) quickEl.style.display = 'none';
+  renderOpsBar();
+  renderEntry();
+}
+// 许愿卡已选张数（双池草稿合计）
+function wishSelected() {
+  let n = 0;
+  for (const pool of ENTRY_POOLS) {
+    for (const cnt of Object.values((wishCounts || {})[pool] || {})) n += cnt;
+  }
+  return n;
+}
+// 一键应用：所有 R/SR/SSR/PR 卡最多保留 N 张（其他稀有度保持原张数不变）
 function applyPurgeQuick() {
-  if (!purgeMode) return;
+  if (opMode !== 'purge') return;
   if (isMergedView()) {
     showToast('请先选择具体账号');
     return;
@@ -2454,10 +2800,11 @@ function applyPurgeQuick() {
     return;
   }
   if (n > 99) n = 99;
-  for (const pool of ['xiari', 'junuan']) {
+  for (const pool of entryPoolsForView()) {
     if (!cardCounts[pool]) cardCounts[pool] = {};
     for (const card of poolCards(pool)) {
-      if (card.rarity === 'ex') continue; // 特殊奖励不设
+      // 仅作用 R/SR/SSR/PR；其他稀有度（SP/UR/HR 等）保持原来的张数
+      if (!QUICK_RARITIES.includes(card.rarity)) continue;
       // 原数字小于设定值时保留原数字（不放大）
       const cur = cardCounts[pool][card.id] || 0;
       cardCounts[pool][card.id] = cur < n ? cur : n;
@@ -2468,21 +2815,25 @@ function applyPurgeQuick() {
   updateStats();
   renderPanels();
   updatePurgeBadge();
-  showToast(`✅ 已应用：每张卡最多保留 ${n} 张`);
+  showToast(`✅ 已应用：R/SR/SSR/PR 每张最多保留 ${n} 张（其他稀有度不变）`);
 }
-// 计算正常模式总张数（快照）与保留模式总张数（当前）的差额，更新角标
+// 更新导出按钮角标：purge=与快照的差额；wish=已选/上限
 function updatePurgeBadge() {
   const badge = document.getElementById('purgeBadge');
   if (!badge) return;
-  if (!purgeMode || !purgeSnapshot) {
+  if (opMode === 'wish') {
+    badge.textContent = `已选${wishSelected()}/${wishLimit}张`;
+    badge.className = 'purge-badge';
+    return;
+  }
+  if (opMode !== 'purge' || !opSnapshot) {
     badge.textContent = '';
     return;
   }
   let normalTotal = 0,
     purgeTotal = 0;
-  for (const pool of ['xiari', 'junuan']) {
-    for (const cnt of Object.values(purgeSnapshot[pool] || {}))
-      normalTotal += cnt;
+  for (const pool of entryPoolsForView()) {
+    for (const cnt of Object.values(opSnapshot[pool] || {})) normalTotal += cnt;
     for (const cnt of Object.values(cardCounts[pool] || {})) purgeTotal += cnt;
   }
   const diff = normalTotal - purgeTotal;
@@ -2496,80 +2847,84 @@ function updatePurgeBadge() {
     badge.textContent = '';
   }
 }
-// 导出一键保留数据（用保留模式下修改后的数字生成 JSON，退出时恢复原始数据）
-async function exportPurgeData() {
-  if (!purgeMode) return;
-  if (isMergedView()) {
+// 导出操作数据：生成 JSON 记录 + 复制剪切板，随后退出并恢复原状
+async function exportOpData() {
+  if (!opMode) return;
+  const isWish = opMode === 'wish';
+  if (!isWish && isMergedView()) {
     showToast('请先选择具体账号');
     return;
   }
-  // 计算差额：正常模式 - 保留模式
-  let normalTotal = 0,
-    purgeTotal = 0;
-  for (const pool of ['xiari', 'junuan']) {
-    for (const cnt of Object.values(purgeSnapshot[pool] || {}))
-      normalTotal += cnt;
-    for (const cnt of Object.values(cardCounts[pool] || {})) purgeTotal += cnt;
+  const counts = isWish ? wishCounts : cardCounts;
+  let total = 0;
+  for (const pool of entryPoolsForView()) {
+    for (const cnt of Object.values(counts[pool] || {})) total += cnt;
   }
-  const diff = normalTotal - purgeTotal;
-  // 保留模式比正常多 → 确认
-  if (diff < 0) {
-    const ok = await showConfirmModal({
-      title: '⚠️ 提示',
-      body: `导出数据比持有卡池数据多 ${-diff} 张，确实导出吗？`,
-      buttons: [
-        { text: '取消', type: 'outline', value: false },
-        { text: '确定导出', type: 'primary', value: true },
-      ],
-    });
-    if (!ok) return;
+  if (isWish && total === 0) {
+    showToast('⚠️ 请先选择许愿卡');
+    return;
   }
-  // 默认不覆盖：导出后恢复原始数据
-  // 用当前 cardCounts（保留模式下用户修改后的数字）生成 JSON
+  if (!isWish) {
+    // 与快照比较：保留模式比正常多 → 确认
+    let normalTotal = 0;
+    for (const pool of entryPoolsForView()) {
+      for (const cnt of Object.values(opSnapshot[pool] || {}))
+        normalTotal += cnt;
+    }
+    if (total - normalTotal > 0) {
+      const ok = await showConfirmModal({
+        title: '⚠️ 提示',
+        body: `导出数据比持有卡池数据多 ${total - normalTotal} 张，确实导出吗？`,
+        buttons: [
+          { text: '取消', type: 'outline', value: false },
+          { text: '确定导出', type: 'primary', value: true },
+        ],
+      });
+      if (!ok) return;
+    }
+  }
+  // 导出数据记录来源账号（单账号=该账号 / 总账号=合并视图）
+  const accId = activeAccountId;
+  const accName = isMergedView()
+    ? '总账号（全部合并）'
+    : activeAccount()
+      ? activeAccount().name
+      : '';
+  // 用当前选择（保留模式=修改后的数字 / 许愿=草稿）生成 JSON
   const data = {
-    cardCounts,
+    cardCounts: counts,
     version: 3,
     exportedAt: new Date().toISOString(),
-    type: 'purge',
+    type: isWish ? 'wish' : 'purge',
+    accountId: accId,
+    accountName: accName,
   };
+  if (isWish) data.wishLimit = wishLimit;
   const json = JSON.stringify(data);
-  // 往记录页生成一条 purge 记录
-  history.unshift({
+  // 往记录页生成一条导出记录（合并视图下写入首个账号以持久化，聚合视图同步显示）
+  const entry = {
     time: new Date().toISOString(),
     pool: currentPool,
     cards: [],
-    type: 'purge',
+    type: isWish ? 'wish' : 'purge',
+    accountId: accId,
+    accountName: accName,
     json,
-  });
-  // 默认不覆盖：恢复原始数据
-  if (purgeSnapshot) {
-    cardCounts = JSON.parse(JSON.stringify(purgeSnapshot));
-    purgeSnapshot = null;
+  };
+  if (isMergedView()) {
+    const tid = accountOrder.find(id => accounts[id]);
+    if (tid) accounts[tid].history.unshift(entry);
+    history.unshift(entry);
+    saveData(); // 合并视图全局不写穿，直接持久化账号存储
+  } else {
+    history.unshift(entry);
+    saveData(); // 单账号视图：写入该账号并持久化（许愿无快照恢复，需在此落盘）
   }
-  saveData();
-  updateStats();
-  renderPanels();
-  renderHistory();
-  // 自动复制到剪切板
   copyToClipboard(json, '✅ 已生成记录并复制到剪切板');
-  // 退出标记模式，回到初始状态（隐藏角标、快捷操作区）
-  exitPurgeMode();
+  renderHistory();
+  // 退出操作模式（purge 恢复原始数据，默认不覆盖）
+  finishOpMode();
 }
-
-// 退出保留模式，重置所有 UI 状态
-function exitPurgeMode() {
-  purgeMode = false;
-  const selectBtn = document.getElementById('purgeSelectBtn');
-  const exportBtn = document.getElementById('purgeExportBtn');
-  const quickEl = document.getElementById('purgeQuick');
-  const badge = document.getElementById('purgeBadge');
-  if (selectBtn) selectBtn.textContent = '选择一键保留数据';
-  if (exportBtn) exportBtn.disabled = true;
-  if (quickEl) quickEl.style.display = 'none';
-  if (badge) badge.textContent = '';
-  renderEntry();
-}
-
 // 复制文本到剪切板（带提示）
 function copyToClipboard(text, successMsg) {
   const done = () => {
@@ -2604,22 +2959,36 @@ function fallbackCopy(text, done) {
   }
 }
 
-// 录入页：双卡池页签 + 分组卡片网格，每卡可加减数量
+// 操作/录入模式当前池的计数对象：wish 用草稿，其余用 cardCounts
+function entryCounts(pool) {
+  if (opMode === 'wish') {
+    if (!wishCounts) wishCounts = emptyCounts();
+    return wishCounts[pool] || {};
+  }
+  return cardCounts[pool] || {};
+}
+
+// 录入页：卡池页签 + 分组卡片网格，每卡可加减数量（展示池随模式/操作变化）
 function renderEntry() {
+  // 同步操作菜单（门槛/状态随数据与账号变化）
+  renderOpsBar();
+  // 当前视图不含该卡池时回落到夏日池（如许愿模式不含小卡池）
+  const pools = entryPoolsForView();
+  if (!pools.includes(currentPool)) currentPool = 'xiari';
   // 渲染卡池页签
   const tabs = document.getElementById('entryPoolTabs');
   if (tabs) {
-    tabs.innerHTML = Object.entries(POOLS)
+    tabs.innerHTML = pools
       .map(
-        ([key, def]) =>
-          `<button class="pool-tab${key === currentPool ? ' active' : ''}" data-pool="${key}" onclick="switchPool('${key}')">${def.name}</button>`,
+        key =>
+          `<button class="pool-tab${key === currentPool ? ' active' : ''}" data-pool="${key}" onclick="switchPool('${key}')">${POOLS[key].name}</button>`,
       )
       .join('');
   }
 
   const grid = document.getElementById('entryGrid');
   if (!grid) return;
-  const c = cardCounts[currentPool] || {};
+  const c = entryCounts(currentPool);
   const cards = poolCards(currentPool);
 
   // 分组（与收藏页一致：按稀有度 / 按卡牌类型）
@@ -2660,6 +3029,10 @@ function renderEntry() {
 }
 
 // 单张录入卡 HTML（key 用于 DOM id，便于局部更新）
+// 许愿不可选的卡：特殊奖励（ex）与衣料卡
+function wishCardDisabled(card) {
+  return card.rarity === 'ex' || card.type === '衣料卡';
+}
 function entryCellHTML(card, c) {
   const imgs = cardImages[currentPool] && cardImages[currentPool][card.id];
   const idText = card.rarity === 'ex' ? '★' : card.id.toUpperCase();
@@ -2668,8 +3041,15 @@ function entryCellHTML(card, c) {
     ? `<img src="${imgSrc}" alt="${card.id}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;">${idText}</span>`
     : `<span>${idText}</span>`;
   const cnt = c[card.id] || 0;
-  const keepBadge = purgeMode ? '<div class="keep-badge">保留</div>' : '';
-  const disabled = isMergedView();
+  const keepBadge = opMode
+    ? `<div class="keep-badge">${opMode === 'wish' ? '许愿' : '保留'}</div>`
+    : '';
+  // 禁用条件：wish 模式特典卡不可选；purge 模式可编辑；
+  // 普通状态=合并视图只读，或 stock 模式未进入操作
+  let disabled;
+  if (opMode === 'wish') disabled = wishCardDisabled(card);
+  else if (opMode === 'purge') disabled = false;
+  else disabled = isMergedView() || isStockMode();
   const disAttr = disabled ? 'disabled' : '';
   const roAttr = disabled ? 'readonly' : '';
   const mergedCls = disabled ? ' entry-cell-merged' : '';
@@ -2691,7 +3071,7 @@ function entryCellHTML(card, c) {
 function updateEntryCell(id) {
   const cell = document.getElementById('ecell-' + id);
   if (!cell) return;
-  const c = cardCounts[currentPool] || {};
+  const c = entryCounts(currentPool);
   const cnt = c[id] || 0;
   cell.classList.toggle('has', cnt > 0);
   cell.classList.toggle('zero', cnt === 0);
@@ -2700,9 +3080,9 @@ function updateEntryCell(id) {
   // 保留模式下：当前数 > 原始数（快照）时显示红字提示
   const hint = cell.querySelector('.entry-over-hint');
   if (hint) {
-    if (purgeMode && purgeSnapshot) {
+    if (opMode === 'purge' && opSnapshot) {
       const orig =
-        (purgeSnapshot[currentPool] && purgeSnapshot[currentPool][id]) || 0;
+        (opSnapshot[currentPool] && opSnapshot[currentPool][id]) || 0;
       if (cnt > orig) {
         hint.textContent = '超出原' + (cnt - orig) + '张';
         hint.style.display = 'block';
@@ -2719,7 +3099,7 @@ function updateEntryCell(id) {
 function updateGroupCount(key) {
   const el = document.getElementById('gcount-' + key);
   if (!el) return;
-  const c = cardCounts[currentPool] || {};
+  const c = entryCounts(currentPool);
   const cards = poolCards(currentPool);
   let grp;
   if (groupMode === 'rarity') {
@@ -2740,18 +3120,39 @@ function groupKeyOf(card) {
 }
 
 // 录入页卡片加减（直接修改数量，记录到 history）
+// stock 模式：仅操作模式（一键保留/许愿卡）下可调整；manual 模式：始终开放
 function adjustEntry(id, delta) {
-  if (isMergedView()) {
+  if (!opMode && isMergedView()) {
     showToast('请先选择具体账号');
+    return;
+  }
+  if (!opMode && isStockMode()) {
+    showToast('📦 真实库存模式下不可手动修改，请在「操作菜单」中选择一键保留');
     return;
   }
   const card = cardByID(currentPool, id);
   if (!card) return;
+  // 许愿卡：写草稿，不落库不影响统计；特殊奖励/衣料卡不可选
+  if (opMode === 'wish') {
+    if (wishCardDisabled(card)) return;
+    if (!wishCounts) wishCounts = emptyCounts();
+    if (!wishCounts[currentPool]) wishCounts[currentPool] = {};
+    const cur = wishCounts[currentPool][id] || 0;
+    if (delta > 0 && wishSelected() >= wishLimit) {
+      showToast(`⚠️ 最多可选 ${wishLimit} 张许愿卡`);
+      return;
+    }
+    wishCounts[currentPool][id] = Math.max(0, cur + delta);
+    updateEntryCell(id);
+    updateGroupCount(groupKeyOf(card));
+    updatePurgeBadge();
+    return;
+  }
   if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
   const cur = cardCounts[currentPool][id] || 0;
   const next = Math.max(0, cur + delta);
   cardCounts[currentPool][id] = next;
-  if (!purgeMode) {
+  if (!opMode) {
     if (delta > 0) {
       pushHistory({
         time: new Date().toISOString(),
@@ -2779,13 +3180,37 @@ function adjustEntry(id, delta) {
 }
 
 // 录入页手动输入数量（直接设为指定值，差异记为单抽/调整）
+// stock 模式：仅操作模式（一键保留/许愿卡）下可调整；manual 模式：始终开放
 function setEntryCount(id, val) {
-  if (isMergedView()) {
+  if (!opMode && isMergedView()) {
     showToast('请先选择具体账号');
+    return;
+  }
+  if (!opMode && isStockMode()) {
+    showToast('📦 真实库存模式下不可手动修改，请在「操作菜单」中选择一键保留');
     return;
   }
   const card = cardByID(currentPool, id);
   if (!card) return;
+  // 许愿卡：写草稿并按上限收敛；特殊奖励/衣料卡不可选
+  if (opMode === 'wish') {
+    if (wishCardDisabled(card)) return;
+    if (!wishCounts) wishCounts = emptyCounts();
+    if (!wishCounts[currentPool]) wishCounts[currentPool] = {};
+    const cur = wishCounts[currentPool][id] || 0;
+    let next = parseInt(val);
+    if (isNaN(next) || next < 0) next = 0;
+    const room = wishLimit - (wishSelected() - cur);
+    if (next > room) {
+      next = Math.max(cur, room);
+      showToast(`⚠️ 最多可选 ${wishLimit} 张许愿卡`);
+    }
+    wishCounts[currentPool][id] = next;
+    updateEntryCell(id);
+    updateGroupCount(groupKeyOf(card));
+    updatePurgeBadge();
+    return;
+  }
   if (!cardCounts[currentPool]) cardCounts[currentPool] = {};
   const cur = cardCounts[currentPool][id] || 0;
   let next = parseInt(val);
@@ -2795,7 +3220,7 @@ function setEntryCount(id, val) {
     return;
   } // 无变化
   cardCounts[currentPool][id] = next;
-  if (!purgeMode) {
+  if (!opMode) {
     const type = next > cur ? 'manual' : 'adjust';
     const diff = Math.abs(next - cur);
     const cards = Array(diff).fill(id);
@@ -2924,22 +3349,30 @@ function renderHistory() {
     .map(g => {
       const t = new Date(g.startMs);
       const ts = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
-      // 含 JSON 的导出记录（全量导出 / 一键保留导出）：独立展示 + 复制按钮
+      // 含 JSON 的导出记录（全量导出 / 一键保留 / 许愿卡）：独立展示 + 复制按钮
       if (
         g.items[0] &&
-        (g.items[0].type === 'purge' || g.items[0].type === 'export')
+        (g.items[0].type === 'purge' ||
+          g.items[0].type === 'wish' ||
+          g.items[0].type === 'export')
       ) {
         const it = g.items[0];
         const isExport = it.type === 'export';
-        const title = isExport ? '💾 全量数据导出' : '📤 一键保留导出';
+        const isWish = it.type === 'wish';
+        const title = isExport
+          ? '💾 全量数据导出'
+          : isWish
+            ? '🌟 许愿卡导出'
+            : '📤 一键保留导出';
+        // 标注来源账号（单账号名 / 总账号），便于合并视图下区分
+        const accTag = it.accountName ? ` · ${it.accountName}` : '';
         const preview =
           it.json.length > 120 ? it.json.slice(0, 120) + '...' : it.json;
-        const applyBtn =
-          it.type === 'purge'
-            ? `<button class="btn btn-sm btn-outline purge-apply" onclick="viewPurgeCollection(${history.indexOf(it)})">📖 查看保留图鉴</button>`
-            : '';
+        const applyBtn = isExport
+          ? ''
+          : `<button class="btn btn-sm btn-outline purge-apply" onclick="viewPurgeCollection(${history.indexOf(it)})">📖 ${isWish ? '查看许愿清单' : '查看保留图鉴'}</button>`;
         return `<div class="history-item purge-item">
-          <div class="history-header"><span class="history-pool">${title}</span><span class="history-time">${ts}</span></div>
+          <div class="history-header"><span class="history-pool">${title}${accTag}</span><span class="history-time">${ts}</span></div>
           <div class="purge-json">${preview}</div>
           <div class="purge-actions">
             <button class="btn btn-sm btn-outline purge-copy" onclick="copyPurgeJson(${history.indexOf(it)})">📋 复制完整数据</button>
@@ -2947,7 +3380,7 @@ function renderHistory() {
           </div>
         </div>`;
       }
-      const pn = g.pool === 'xiari' ? '🏖️ 夏日池' : '🍊 橘暖池';
+      const pn = (POOLS[g.pool] && POOLS[g.pool].name) || g.pool;
       // 组内各卡净变化：manual 计正、adjust 计负
       const delta = {};
       for (const it of g.items) {
@@ -2994,8 +3427,10 @@ function viewPurgeCollection(idx) {
     const data = JSON.parse(it.json);
     const counts = data.cardCounts || {};
     let html = '';
-    const poolTotals = { xiari: 0, junuan: 0 };
-    for (const pool of ['xiari', 'junuan']) {
+    // 保留导出含小卡池；许愿记录仅双池
+    const viewPools = data.type === 'wish' ? ENTRY_POOLS : ALL_POOLS;
+    const poolTotals = {};
+    for (const pool of viewPools) {
       const c = counts[pool] || {};
       const poolTotal = Object.values(c).reduce((s, n) => s + n, 0);
       poolTotals[pool] = poolTotal;
@@ -3067,8 +3502,9 @@ function viewPurgeCollection(idx) {
     if (!html)
       html =
         '<div style="text-align:center;color:var(--brown-200);padding:30px;">无卡牌数据</div>';
+    const isWish = it.type === 'wish';
     document.getElementById('bonusModalTitle').innerHTML =
-      `📖 保留图鉴 <span style="font-size:12px;color:var(--brown-200);font-weight:500;">夏日池${poolTotals.xiari}张，橘暖池${poolTotals.junuan}张，奖励卡${rewardItems.length}张</span>`;
+      `${isWish ? '🌟 许愿清单' : '📖 保留图鉴'} <span style="font-size:12px;color:var(--brown-200);font-weight:500;">夏日池${poolTotals.xiari}张，橘暖池${poolTotals.junuan}张${isWish ? '' : `，奖励卡${rewardItems.length}张`}</span>`;
     document.getElementById('bonusModalBody').innerHTML = html;
     document.getElementById('bonusModal').style.display = 'flex';
   } catch (e) {
@@ -3207,12 +3643,16 @@ function applyImportData(text) {
         (data.activeAccountId && accounts[data.activeAccountId])
           ? data.activeAccountId
           : accountOrder[0] || 'a1';
-      // 兜底：确保每个账号字段完整
+      // 兜底：确保每个账号字段完整（含小卡池键）
       for (const acc of Object.values(accounts)) {
-        if (!acc.cardCounts) acc.cardCounts = { xiari: {}, junuan: {} };
-        if (!acc.cardImages) acc.cardImages = { xiari: {}, junuan: {} };
+        if (!acc.cardCounts) acc.cardCounts = emptyCounts();
+        if (!acc.cardImages) acc.cardImages = emptyCounts();
         if (!acc.history) acc.history = [];
         if (!acc.extraRewards) acc.extraRewards = defaultExtraRewards();
+        for (const pool of ALL_POOLS) {
+          if (!acc.cardCounts[pool]) acc.cardCounts[pool] = {};
+          if (!acc.cardImages[pool]) acc.cardImages[pool] = {};
+        }
       }
       // 先装载到全局（让全局指向新导入的当前账号数据），再 saveData
       // 否则 persistActiveAccount 会用旧全局覆盖 accounts[activeAccountId]
@@ -3237,8 +3677,12 @@ function applyImportData(text) {
       return false;
     }
     // 改全局变量（而非 acc.xxx），否则 persistActiveAccount 会用旧全局覆盖 acc
-    cardCounts = data.cardCounts || { xiari: {}, junuan: {} };
-    cardImages = data.cardImages || { xiari: {}, junuan: {} };
+    cardCounts = data.cardCounts || emptyCounts();
+    cardImages = data.cardImages || emptyCounts();
+    for (const pool of ALL_POOLS) {
+      if (!cardCounts[pool]) cardCounts[pool] = {};
+      if (!cardImages[pool]) cardImages[pool] = {};
+    }
     extraRewards = data.extraRewards || defaultExtraRewards();
     history = (data.history || []).map(h =>
       h.accountId ? h : { ...h, accountId: activeAccountId },
@@ -3276,9 +3720,9 @@ async function clearAllData() {
   });
   if (!ok) return;
   // 改全局变量（而非 acc.xxx），否则 persistActiveAccount 会用旧全局覆盖 acc
-  cardCounts = { xiari: {}, junuan: {} };
+  cardCounts = emptyCounts();
   history = [];
-  cardImages = { xiari: {}, junuan: {} };
+  cardImages = emptyCounts();
   extraRewards = defaultExtraRewards();
   saveData(); // persistActiveAccount 把新全局回写到当前账号
   loadActiveAccountIntoGlobals();
@@ -3338,13 +3782,20 @@ function showToast(msg) {
 // ==================== 账号管理（多账号）====================
 // 文本输入弹窗（复用 confirm 模式但带输入框），返回 Promise<string|null>
 let _promptResolve = null;
-function showPromptModal({ title, placeholder = '', value = '' }) {
+function showPromptModal({
+  title,
+  placeholder = '',
+  value = '',
+  inputmode = '',
+}) {
   return new Promise(resolve => {
     _promptResolve = resolve;
     document.getElementById('promptTitle').textContent = title || '输入';
     const inp = document.getElementById('promptInput');
     inp.value = value;
     inp.placeholder = placeholder;
+    if (inputmode) inp.inputMode = inputmode;
+    else inp.removeAttribute('inputmode');
     document.getElementById('promptModal').style.display = 'flex';
     setTimeout(() => {
       inp.focus();
@@ -3392,9 +3843,15 @@ function renderAccountList() {
     const a = accounts[id];
     if (!a) return;
     const nameEsc = escapeHtml(a.name);
+    const phoneTag = a.phone ? ` <span class="acc-phone-tag">📱</span>` : '';
+    // 库存模式下所有账号可绑定/改绑手机号（提交后自动查询覆盖库存）
+    const phoneBtn = isStockMode()
+      ? `<button class="acc-mini wide" onclick="changeAccountPhone('${id}')" title="${a.phone ? '修改' : '绑定'}手机号">${a.phone ? '改号' : '绑号'}</button>`
+      : '';
     html += `<div class="acc-row ${id === activeAccountId ? 'active' : ''}">
-      <span class="acc-name" onclick="selectAccount('${id}')">${nameEsc}</span>
+      <span class="acc-name" onclick="selectAccount('${id}')">${nameEsc}${phoneTag}</span>
       <div class="acc-actions">
+        ${phoneBtn}
         <button class="acc-mini" onclick="moveAccount('${id}',-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button class="acc-mini" onclick="moveAccount('${id}',1)" ${i === accountOrder.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="acc-mini" onclick="renameAccount('${id}')">✏️</button>
@@ -3419,16 +3876,39 @@ function genAccountId() {
 async function addAccount() {
   const name = await showPromptModal({
     title: '添加新账号',
-    placeholder: '输入账号名称',
+    placeholder: '输入账号名称或下单手机号',
   });
   if (!name) return;
+  // 看起来像手机号 → 先建号，再查远程库存替换
+  const isPhone = /^1\d{10}$/.test(name);
   const id = genAccountId();
-  accounts[id] = { name, ...emptyAccountData() };
+  accounts[id] = {
+    name: isPhone ? phoneMask(name) : name,
+    ...(isPhone ? { phone: name } : {}),
+    ...emptyAccountData(),
+  };
   accountOrder.push(id);
   saveData();
   closeAccountModal();
   switchAccount(id);
-  showToast('✅ 已创建账号 ' + name);
+  if (isPhone) {
+    showToast('🔍 正在查询远程库存...');
+    const counts = await fetchStockByPhone(name);
+    if (counts) {
+      accounts[id].cardCounts = counts;
+      loadActiveAccountIntoGlobals(); // 新号即激活账号，重载全局防 persistActiveAccount 回写旧引用
+      saveData();
+      updateStats();
+      renderPanels();
+      renderCollection();
+      if (currentTab === 'entry') renderEntry();
+      showToast(`✅ 已创建账号并导入真实库存（双池 ${totalDraws()} 张）`);
+    } else {
+      showToast('⚠️ 未查到该手机号的库存，已创建空账号');
+    }
+  } else {
+    showToast('✅ 已创建账号 ' + name);
+  }
 }
 async function renameAccount(id) {
   if (!accounts[id]) return;
@@ -3442,6 +3922,57 @@ async function renameAccount(id) {
   updateAccountSwitcherLabel();
   renderAccountList();
   showToast('✅ 已重命名');
+}
+// 绑定/修改账号手机号（库存模式）：查询该号远程库存并覆盖本账号
+async function changeAccountPhone(id) {
+  if (!isStockMode()) return;
+  const acc = accounts[id];
+  if (!acc) return;
+  const oldPhone = acc.phone || '';
+  const input = await showPromptModal({
+    title: oldPhone ? '修改绑定手机号' : '绑定手机号',
+    placeholder: '输入下单手机号',
+    value: oldPhone,
+    inputmode: 'numeric',
+  });
+  if (!input) return;
+  if (!/^1\d{10}$/.test(input)) {
+    showToast('⚠️ 请输入 11 位手机号');
+    return;
+  }
+  if (input === oldPhone) {
+    showToast('📱 号码未变化');
+    return;
+  }
+  const other = findAccountByPhone(input);
+  if (other && other !== id) {
+    showToast('⚠️ 该手机号已绑定账号「' + accounts[other].name + '」');
+    return;
+  }
+  showToast('🔍 正在查询远程库存...');
+  const counts = await fetchStockByPhone(input);
+  if (!counts) {
+    showToast('⚠️ 未查到该手机号的库存，绑定未修改');
+    return;
+  }
+  // 覆盖库存并绑定；默认脱敏名跟随号码，用户改过名则保留
+  acc.phone = input;
+  acc.cardCounts = counts;
+  if (oldPhone && acc.name === phoneMask(oldPhone)) acc.name = phoneMask(input);
+  else if (!oldPhone && acc.name === '默认账号') acc.name = phoneMask(input);
+  // 激活账号的 cardCounts 引用被替换：先重载全局再保存，防止旧引用回写
+  if (isMergedView()) computeMergedGlobals();
+  else if (activeAccountId === id) loadActiveAccountIntoGlobals();
+  saveData();
+  updateStats();
+  renderPanels();
+  renderCollection();
+  if (currentTab === 'entry') renderEntry();
+  renderAccountList();
+  updateAccountSwitcherLabel();
+  showToast(
+    `✅ 已改绑 ${phoneMask(input)} 并更新库存（双池 ${totalDraws()} 张）`,
+  );
 }
 async function deleteAccount(id) {
   if (!accounts[id]) return;
@@ -3500,27 +4031,232 @@ function setCardImage(pool, id, frontBase64, backBase64) {
   renderCollection();
 }
 
-// ==================== STARTUP ====================
+// ==================== 真实库存模式（活动结束：按手机号查远程库存）====================
+const STOCK_API =
+  'https://josephccl-d3go7vizze88241ba-1456400312.ap-shanghai.app.tcloudbase.com/getValueHttp';
+// 手机号 → 账号 id 映射，避免重复导入时重复建号
+function findAccountByPhone(phone) {
+  for (const id of Object.keys(accounts)) {
+    if (accounts[id].phone === phone) return id;
+  }
+  return null;
+}
+// 调云函数查单个手机号的库存，返回 {xiari:{},junuan:{}}，失败返回 null
+async function fetchStockByPhone(phone) {
+  try {
+    const res = await fetch(STOCK_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: phone }),
+    });
+    const json = await res.json();
+    if (json.code !== 0 || !json.data || !json.data.value) return null;
+    const counts = JSON.parse(json.data.value);
+    if (!counts || typeof counts !== 'object') return null;
+    // 规范化：补齐三池 + 过滤无效 id（小卡池库存也随手机号同步）
+    const out = emptyCounts();
+    for (const pool of ALL_POOLS) {
+      const valid = new Set(poolIDs(pool));
+      const src = counts[pool] || {};
+      for (const [id, cnt] of Object.entries(src)) {
+        if (valid.has(id) && cnt > 0) out[pool][id] = cnt;
+      }
+    }
+    return out;
+  } catch (e) {
+    console.error('查询库存失败:', phone, e);
+    return null;
+  }
+}
+// 解析用户输入的多个手机号（换行/逗号/空格分隔，去重保序）
+function parsePhones(text) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of String(text || '').split(/[\s,，;；、]+/)) {
+    const p = raw.trim();
+    if (!p) continue;
+    if (seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+// 批量导入入口（通知弹窗）：逐号查询，按号建/换账号并替换库存
+async function importStockFromNotice() {
+  const textarea = document.getElementById('stockPhones');
+  const statusEl = document.getElementById('stockImportStatus');
+  const btn = document.getElementById('stockImportBtn');
+  if (!textarea || !btn) return;
+  const phones = parsePhones(textarea.value);
+  if (phones.length === 0) {
+    if (statusEl) statusEl.textContent = '';
+    showToast('⚠️ 请先输入手机号');
+    return;
+  }
+  btn.disabled = true;
+  const prevLabel = btn.textContent;
+  btn.textContent = '🔍 查询中...';
+  const okList = [];
+  const failList = [];
+  for (let i = 0; i < phones.length; i++) {
+    const phone = phones[i];
+    if (statusEl)
+      statusEl.textContent = `正在查询 ${i + 1}/${phones.length}：${phone}`;
+    const counts = await fetchStockByPhone(phone);
+    if (counts) okList.push({ phone, counts });
+    else failList.push(phone);
+  }
+  let applied = 0;
+  for (const { phone, counts } of okList)
+    applied += applyStockToAccount(phone, counts);
+  // 汇总反馈
+  let msg;
+  if (okList.length > 0 && failList.length === 0) {
+    msg = `✅ 已导入 ${okList.length} 个号（${applied} 个账号）`;
+  } else if (okList.length > 0) {
+    msg = `⚠️ 成功 ${okList.length} 个，失败 ${failList.length} 个：${failList.join('、')}`;
+  } else {
+    msg = `⚠️ 查询失败：${phones.join('、')}（无库存数据或网络错误）`;
+  }
+  if (statusEl) statusEl.textContent = msg;
+  showToast(msg);
+  btn.disabled = false;
+  btn.textContent = prevLabel;
+  if (okList.length > 0) {
+    // 激活账号可能被替换了 cardCounts 引用，先重载全局再保存，
+    // 否则 persistActiveAccount 会用旧全局覆盖刚导入的库存
+    loadActiveAccountIntoGlobals();
+    saveData();
+    updateStats();
+    renderPanels();
+    renderCollection();
+    if (currentTab === 'entry') renderEntry();
+    if (currentTab === 'history') renderHistory();
+    updateAccountSwitcherLabel();
+  }
+}
+// 把远程库存落到账号：已有手机号账号→替换库存；否则新建账号。返回账号 id 或 null
+function applyStockToAccount(phone, counts) {
+  let id = findAccountByPhone(phone);
+  if (id) {
+    accounts[id].cardCounts = counts;
+    accounts[id].phone = phone;
+    return id;
+  }
+  // 未绑定手机号的首个「默认账号」可直接认领（首次导入场景）
+  const unclaimed = accountOrder.find(
+    aid =>
+      accounts[aid] &&
+      !accounts[aid].phone &&
+      accounts[aid].name === '默认账号',
+  );
+  if (unclaimed) {
+    id = unclaimed;
+    accounts[id].name = phoneMask(phone);
+    accounts[id].phone = phone;
+    accounts[id].cardCounts = counts;
+    return id;
+  }
+  // 新建账号
+  id = genAccountId();
+  accounts[id] = { name: phoneMask(phone), phone, ...emptyAccountData() };
+  accounts[id].cardCounts = counts;
+  accountOrder.push(id);
+  return id;
+}
+// 手机号脱敏展示：138****0001
+function phoneMask(phone) {
+  const p = String(phone);
+  if (p.length < 7) return p;
+  return p.slice(0, 3) + '****' + p.slice(-4);
+}
+
 loadData();
+// 按 APP_MODE 同步 UI 显隐（启动与运行时切换都调用；业务函数用 isStockMode() 判断）
+function applyAppMode() {
+  const stock = isStockMode();
+  // 手动/OCR 子页签：仅 manual 模式显示
+  const subTabs = document.querySelector('#tab-entry .sub-tabs');
+  if (subTabs) subTabs.style.display = stock ? 'none' : '';
+  const subOcr = document.getElementById('sub-ocr');
+  if (subOcr) subOcr.style.display = 'none'; // 两模式默认都隐藏，manual 下由 switchSubTab 控制
+  // stock 模式提示条：仅 stock 模式显示
+  const note = document.getElementById('stockModeNote');
+  if (note) note.style.display = stock ? '' : 'none';
+  // 底部 Tab 文案：stock=操作菜单（一键保留/许愿卡），manual=录入
+  const entryTab = document.querySelector('.tab-item[data-tab="entry"]');
+  if (entryTab)
+    entryTab.innerHTML = stock
+      ? '<span class="tab-icon">🛠️</span>操作'
+      : '<span class="tab-icon">✍️</span>录入';
+  // 顶栏模式按钮文案
+  const modeBtn = document.getElementById('modeToggleBtn');
+  if (modeBtn) modeBtn.textContent = stock ? '📦 库存' : '✍️ 手动';
+  // 小卡池页签：仅 stock 模式显示（小卡只随手机号库存同步，不参与录入）
+  const xkTab = document.querySelector('.pool-tab[data-pool="xiaoka"]');
+  if (xkTab) {
+    xkTab.style.display = stock ? '' : 'none';
+    if (!stock && currentPool === 'xiaoka') switchPool('xiari');
+  }
+  // 撤销按钮：仅 manual 模式显示
+  const undoBtn = document.getElementById('undoLastBtn');
+  if (undoBtn) undoBtn.style.display = stock ? 'none' : '';
+  // 导入按钮：仅 manual 模式显示（库存模式数据随手机号同步，不走导入）
+  const importBtn = document.getElementById('importBtn');
+  if (importBtn) importBtn.style.display = stock ? 'none' : '';
+  // OCR 依赖 tesseract.js（约 8MB 引擎+语言包按需拉取）：仅 manual 模式加载
+  if (!stock && !document.getElementById('tesseractScript')) {
+    const s = document.createElement('script');
+    s.id = 'tesseractScript';
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js';
+    document.head.appendChild(s);
+  }
+  // 操作菜单随模式刷新
+  renderOpsBar();
+}
+// 顶栏按钮：真实库存 ↔ 手动录入 运行时切换（持久化到 localStorage）
+async function toggleAppMode() {
+  const target = isStockMode() ? 'manual' : 'stock';
+  const ok = await showConfirmModal({
+    title: '切换模式',
+    body: isStockMode()
+      ? '切换到 <b>✍️ 手动录入模式</b>？<br>手动 ± / 直填 / 截图识别录入将全部开放。<br><b>两种模式的数据各自独立保存，互不影响。</b>'
+      : '切换到 <b>📦 真实库存模式</b>？<br>库存将通过手机号远程同步，手动录入关闭，仅可在「操作菜单」中一键保留 / 使用许愿卡。<br><b>两种模式的数据各自独立保存，互不影响。</b>',
+    buttons: [
+      { text: '取消', type: 'outline', value: false },
+      { text: '切换', type: 'primary', value: true },
+    ],
+  });
+  if (!ok) return;
+  if (opMode) finishOpMode(); // 取消进行中的操作（恢复快照/丢弃草稿）
+  saveData(); // 当前模式数据落盘（写入当前模式的独立存储键）
+  APP_MODE = target;
+  localStorage.setItem('ccg_app_mode', APP_MODE);
+  loadData(); // 载入另一套独立数据源（账号/库存/记录整套切换）
+  applyAppMode();
+  updateAccountSwitcherLabel();
+  updateStats();
+  renderPanels();
+  renderCollection();
+  renderEntry();
+  renderHistory();
+  showToast(
+    target === 'stock' ? '📦 已切换到真实库存模式' : '✍️ 已切换到手动录入模式',
+  );
+}
+applyAppMode();
 updateAccountSwitcherLabel();
 switchTab('collection');
 switchPool('xiari');
 renderPanels();
-// 启动时弹出存储提醒（版本升级或未选"不再提醒"时弹出）
-const NOTICE_VERSION = '1.3'; // 更新此版本号会让弹窗重新弹出
-const NOTICE_UPDATES = [
-  '修复全员满赠下个人抽数要求的逻辑错误',
-  '新增多图上传识别异常时，异常图修改功能',
-];
+// 启动时弹出「活动结束 → 真实库存模式」提示（选过"不再提醒"则跳过；仅 stock 模式）
+const NOTICE_VERSION = '2.0'; // 更新此版本号会让弹窗重新弹出
 (function showNoticeIfNeeded() {
+  if (!isStockMode()) return;
   const lastDismissed = localStorage.getItem('ccg_notice_version') || '';
   const dismissed = localStorage.getItem('ccg_notice_dismiss') === '1';
   // 版本升级 或 未选不再提醒 → 弹出
   if (lastDismissed !== NOTICE_VERSION || !dismissed) {
-    document.getElementById('noticeVer').textContent = 'v' + NOTICE_VERSION;
-    document.getElementById('noticeUpdateList').innerHTML = NOTICE_UPDATES.map(
-      u => `<li>${u}</li>`,
-    ).join('');
     document.getElementById('noticeModal').style.display = 'flex';
   }
 })();

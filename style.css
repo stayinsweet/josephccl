@@ -137,7 +137,7 @@ html, body {
 .tab-page { display: none; padding: 8px 16px 0; }
 .tab-page.active { display: block; }
 
-/* 录入页子页签 */
+/* 子页签容器（导入弹窗在用） */
 .sub-tabs {
   display: flex; background: var(--white); margin-bottom: 14px; border-radius: 12px;
   padding: 3px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
@@ -299,6 +299,7 @@ html, body {
 .reward-cell.unlocked.rw-global { background: var(--sp-bg); border-color: var(--sp-border); }
 .reward-cell.unlocked.rw-limited { background: #E8F8E8; border-color: #8AB860; }
 .reward-cell.unlocked.rw-promo { background: var(--orange-100); border-color: var(--orange-400); }
+.reward-cell.unlocked.rw-yuzu { background: #F0F7E8; border-color: #B5CC7A; }
 .reward-ph-wrap { width: 100%; aspect-ratio: 1; border-radius: 8px; margin-bottom: 4px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; background: var(--orange-100); }
 .reward-ph-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .reward-ph-wrap img.locked-img { opacity: 0.4; }
@@ -412,6 +413,14 @@ html, body {
 
 /* 一键消除按钮栏 */
 .purge-bar { display: flex; gap: 8px; margin-bottom: 12px; }
+/* 操作菜单（一键保留 / 许愿卡）：按钮行 + 门槛说明 */
+.ops-bar { display: block; }
+.ops-row { display: flex; gap: 8px; }
+.ops-hint { margin-top: 6px; font-size: 11px; color: var(--brown-200); line-height: 1.5; }
+.stock-mode-note {
+  background: var(--orange-50); border-radius: 12px; padding: 12px;
+  font-size: 12px; color: var(--brown-200); line-height: 1.7; margin-bottom: 12px;
+}
 .purge-quick { background: var(--white); border: 1.5px dashed var(--orange-300); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
 .purge-quick-title { font-size: 13px; font-weight: 700; color: var(--orange-600); margin-bottom: 8px; }
 .purge-quick-row { display: flex; align-items: center; gap: 8px; }
@@ -420,6 +429,7 @@ html, body {
 .purge-quick-input:focus { outline: none; border-color: var(--orange-500); }
 .purge-quick-apply { margin-left: auto; padding: 8px 20px; border: none; border-radius: 8px; background: linear-gradient(135deg, var(--orange-500), var(--orange-600)); color: white; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .purge-quick-apply:active { transform: scale(0.94); }
+.purge-quick-hint { margin-top: 8px; font-size: 11px; color: var(--brown-200); line-height: 1.5; }
 .purge-btn {
   flex: 1; padding: 10px; border: 1.5px solid var(--orange-300); background: var(--white);
   color: var(--orange-600); font-size: 12px; font-weight: 700; border-radius: 10px;
@@ -567,6 +577,8 @@ html, body {
   display: flex; align-items: flex-end; justify-content: center;
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
+/* 通用确认/输入弹窗需盖在账号管理等业务弹窗之上（后者在 DOM 中更靠后） */
+#confirmModal, #promptModal { z-index: 120; }
 .modal-sheet {
   background: var(--white); border-radius: 24px 24px 0 0; width: 100%; max-width: 480px;
   max-height: 80vh; overflow-y: auto; padding: 20px; animation: slideUp 0.3s cubic-bezier(0.4,0,0.2,1);
@@ -707,6 +719,7 @@ html, body {
 .acc-row.active { border-color: var(--orange-400); background: rgba(255,237,224,0.9); }
 .acc-name { font-size: 14px; font-weight: 700; color: var(--brown-900); cursor: pointer; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acc-sub { font-size: 11px; color: var(--brown-200); }
+.acc-phone-tag { font-size: 11px; }
 .acc-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .acc-mini {
   width: 30px; height: 30px; border: none; border-radius: 8px; cursor: pointer;
@@ -717,6 +730,7 @@ html, body {
 .acc-mini:active { transform: scale(0.9); }
 .acc-mini:disabled { opacity: 0.3; cursor: not-allowed; }
 .acc-mini.danger { color: var(--danger); }
+.acc-mini.wide { width: auto; min-width: 30px; padding: 0 7px; font-size: 12px; }
 
 /* 合并视图：满赠面板提示 */
 .bn-merged-note {

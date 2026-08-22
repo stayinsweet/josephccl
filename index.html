@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-title" content="joseph的抽抽乐">
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23FF8C42' width='100' height='100' rx='20'/><text x='50' y='65' text-anchor='middle' fill='white' font-size='50' font-family='sans-serif'>🎴</text></svg>">
 <title>joseph的抽抽乐</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@6/dist/tesseract.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -24,8 +23,9 @@
       <button class="header-btn account-switcher" id="accountSwitcherBtn" onclick="openAccountModal()">
         <span id="accountSwitcherLabel">默认账号</span> <span class="caret">▾</span>
       </button>
+      <button class="header-btn" id="modeToggleBtn" onclick="toggleAppMode()">📦 库存</button>
       <button class="header-btn" onclick="exportData()">导出</button>
-      <button class="header-btn" onclick="importData()">导入</button>
+      <button class="header-btn" id="importBtn" onclick="importData()">导入</button>
       <button class="header-btn danger" onclick="clearAllData()">清空</button>
     </div>
   </header>
@@ -48,6 +48,7 @@
           <div class="pool-tabs">
             <button class="pool-tab active" data-pool="xiari" onclick="switchPool('xiari')">🏖️ 夏日池</button>
             <button class="pool-tab" data-pool="junuan" onclick="switchPool('junuan')">🍊 橘暖池</button>
+            <button class="pool-tab" data-pool="xiaoka" onclick="switchPool('xiaoka')" style="display:none;">🎴 小卡池</button>
           </div>
           <div class="group-menu" id="groupMenu" style="display:none;">
             <button class="group-icon-btn" id="groupIconBtn" onclick="toggleGroupMenu(event)" title="切换分组方式">
@@ -70,12 +71,10 @@
       <div class="panel" id="rewardPool"></div>
     </div>
 
-    <!-- Tab 2: 录入（截图识别 + 手动输入 子页签） -->
+    <!-- Tab 2: 操作/录入（真实库存模式=操作菜单：一键保留+许愿卡；手动模式=手动输入+截图识别。由 APP_MODE 切换） -->
     <div class="tab-page" id="tab-entry">
-      <div class="purge-bar">
-        <button class="purge-btn" id="purgeSelectBtn" onclick="togglePurgeMode()">选择一键保留数据</button>
-        <button class="purge-btn primary" id="purgeExportBtn" onclick="exportPurgeData()" disabled>导出一键保留数据<span class="purge-badge" id="purgeBadge"></span></button>
-      </div>
+      <!-- 操作菜单：由 renderOpsBar() 按当前视图与门槛动态渲染 -->
+      <div class="purge-bar ops-bar" id="opsBar"></div>
       <div class="purge-quick" id="purgeQuick" style="display:none;">
         <div class="purge-quick-title">⚡ 快捷操作</div>
         <div class="purge-quick-row">
@@ -84,7 +83,10 @@
           <span class="purge-quick-label">张</span>
           <button class="purge-quick-apply" onclick="applyPurgeQuick()">应用</button>
         </div>
+        <div class="purge-quick-hint">仅作用于 R / SR / SSR / PR 卡面，其他稀有度（SP / UR / HR 等）保持原张数不变</div>
       </div>
+      <div class="stock-mode-note" id="stockModeNote">📦 当前为真实库存模式：库存通过手机号自动同步，无需手动录入。如需刷新库存，请在「账号管理」中添加/重新查询手机号；保留 / 许愿请使用上方「操作菜单」。</div>
+
       <div class="sub-tabs">
         <button class="sub-tab active" data-sub="input" onclick="switchSubTab('input')">🔢 手动输入</button>
         <button class="sub-tab" data-sub="ocr" onclick="switchSubTab('ocr')">📷 截图识别</button>
@@ -97,7 +99,7 @@
           </div>
           <div id="entryGrid"></div>
         </div>
-        <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="undoLast()">↩ 撤销上一次</button>
+        <button class="btn btn-outline" id="undoLastBtn" style="width:100%;margin-top:8px;" onclick="undoLast()">↩ 撤销上一次</button>
       </div>
 
       <div class="sub-page" id="sub-ocr">
@@ -160,7 +162,7 @@
       <span class="tab-icon">📊</span>我的收藏
     </button>
     <button class="tab-item" data-tab="entry" onclick="switchTab('entry')">
-      <span class="tab-icon">✍️</span>录入
+      <span class="tab-icon">🛠️</span>操作
     </button>
     <button class="tab-item" data-tab="history" onclick="switchTab('history')">
       <span class="tab-icon">📝</span>记录
@@ -249,26 +251,24 @@
   </div>
 </div>
 
-<!-- 存储提醒 Modal -->
+<!-- 活动结束 + 真实库存导入 Modal -->
 <div class="modal-overlay" id="noticeModal" style="display:none;">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="bonus-modal-title">⚠️ 重要提醒</div>
+    <div class="bonus-modal-title">📢 活动结束通知</div>
     <div class="notice-body">
-      <p>本应用的数据<strong>存储在浏览器本地</strong>，<strong>清除浏览器缓存/数据会丢失全部记录</strong>！</p>
-      <p>💡 建议定期使用右上角功能备份：</p>
-      <ul>
-        <li><strong>导出</strong>：把所有数据生成 JSON，可复制保存到备忘录/文件。</li>
-        <li><strong>导入</strong>：支持上传文件或粘贴 JSON 恢复数据。</li>
-      </ul>
-      <p>换手机或清缓存前，请务必先<strong>导出</strong>备份！</p>
+      <p>奇妙浆果园 ccl 抽抽活动<strong>已经结束</strong>，本应用现已切换为<strong>真实库存模式</strong>。</p>
+      <p>📦 在下方输入下单手机号，即可查询并同步远程真实卡牌库存；多个手机号将自动建立多个账号，分别替换对应账号的本地库存。</p>
+      <p>💡 数据仍存储在浏览器本地，清缓存会丢失，请定期用右上角「导出」备份。</p>
     </div>
     <div class="notice-update">
-      <div class="notice-update-head">🆕 更新信息 <span class="notice-update-ver" id="noticeVer"></span></div>
-      <ul class="notice-update-list" id="noticeUpdateList"></ul>
+      <div class="notice-update-head">📦 导入真实库存</div>
+      <textarea id="stockPhones" class="import-textarea" style="min-height:72px;font-family:inherit;" inputmode="numeric" placeholder="输入下单手机号，多个用换行、逗号或空格分隔&#10;如：13800000001，13900000002"></textarea>
+      <div id="stockImportStatus" style="font-size:11px;color:var(--brown-200);margin-top:6px;min-height:15px;"></div>
+      <button class="btn btn-primary" id="stockImportBtn" style="width:100%;margin-top:8px;" onclick="importStockFromNotice()">🔍 查询并导入库存</button>
     </div>
-    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeNotice(false)">我知道了</button>
-    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="closeNotice(true)">下次不再提醒</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="closeNotice(true)">下次不再提醒</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px;" onclick="closeNotice(false)">我知道了</button>
   </div>
 </div>
 
