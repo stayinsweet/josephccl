@@ -4035,7 +4035,7 @@ function setCardImage(pool, id, frontBase64, backBase64) {
 
 // ==================== 真实库存模式（活动结束：按手机号查远程库存）====================
 const STOCK_API =
-  'https://josephccl-d3go7vizze88241ba-1456400312.ap-shanghai.app.tcloudbase.com/getValue';
+  'https://josephccl-d3go7vizze88241ba-1456400312.ap-shanghai.app.tcloudbase.com/getValueHttp';
 // 手机号 → 账号 id 映射，避免重复导入时重复建号
 function findAccountByPhone(phone) {
   for (const id of Object.keys(accounts)) {
