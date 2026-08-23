@@ -339,6 +339,15 @@ html, body {
   resize: vertical; -webkit-user-select: text; user-select: text;
 }
 .import-textarea:focus { outline: none; border-color: var(--orange-500); }
+/* 公告弹窗：多号码独立输入行（数字键盘友好） */
+.stock-phone-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.stock-phone-input {
+  flex: 1; min-height: 0; padding: 9px 10px; border: 1.5px solid var(--orange-200); border-radius: 10px;
+  font-size: 13px; font-family: inherit; background: var(--white); color: var(--brown-900);
+  -webkit-user-select: text; user-select: text;
+}
+.stock-phone-input:focus { outline: none; border-color: var(--orange-500); }
+.stock-phone-del { flex-shrink: 0; }
 
 /* Collection */
 .rarity-section { margin-bottom: 18px; }

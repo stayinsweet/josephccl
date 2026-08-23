@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>调用 getValueHttp</title>
+</head>
+<body>
+  <h2>调用 getValueHttp 云函数</h2>
+  <input type="text" id="keyInput" placeholder="输入 key，如 app_name" value="app_name">
+  <button id="callBtn">调用</button>
+  <pre id="result" style="background:#f5f5f5;padding:10px;min-height:40px;"></pre>
+
+  <script>
+    const API_URL = "https://josephccl-d3go7vizze88241ba-1456400312.ap-shanghai.app.tcloudbase.com/getValueHttp";
+
+    document.getElementById("callBtn").addEventListener("click", async () => {
+      const key = document.getElementById("keyInput").value.trim();
+      const resultEl = document.getElementById("result");
+      resultEl.textContent = "请求中...";
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: key })
+        });
+
+        const data = await res.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultEl.textContent = "请求失败: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

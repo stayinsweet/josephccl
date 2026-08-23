@@ -644,36 +644,36 @@ function limitedUnlockedCount() {
   if (t === '7-24') return 1;
   return 0;
 }
-// 柚子限时礼：7.25 当天下单抽卡，用户分四种情况自确认（夏日/橘暖 各 满10/满20）
+// 柚子限时礼：7.25-7.27下单抽卡，用户分四种情况自确认（夏日/橘暖 各 满10/满20）
 const YUZU_REWARDS = ['小狗卡', '尖叫之夜', '蓝柚子', '绿柚子'];
 const YUZU_CARD_TIERS = {
-  小狗卡: '7.25 · 夏日池满10抽',
-  尖叫之夜: '7.25 · 夏日池满20抽',
-  蓝柚子: '7.25 · 橘暖池满10抽',
-  绿柚子: '7.25 · 橘暖池满20抽',
+  小狗卡: '攻玉杀青 · 夏日池满10抽',
+  尖叫之夜: '攻玉杀青 · 夏日池满20抽',
+  蓝柚子: '攻玉杀青 · 橘暖池满10抽',
+  绿柚子: '攻玉杀青 · 橘暖池满20抽',
 };
 const YUZU_TIERS = [
   {
     key: '柚子夏日10',
-    label: '7.25 夏日池满 10 抽',
+    label: '攻玉杀青 夏日池满 10 抽',
     rewards: ['小狗卡'],
     rewardText: '小狗卡',
   },
   {
     key: '柚子夏日20',
-    label: '7.25 夏日池满 20 抽',
+    label: '攻玉杀青 夏日池满 20 抽',
     rewards: ['尖叫之夜', '小狗卡'],
     rewardText: '尖叫之夜 + 小狗卡',
   },
   {
     key: '柚子橘暖10',
-    label: '7.25 橘暖池满 10 抽',
+    label: '攻玉杀青 橘暖池满 10 抽',
     rewards: ['蓝柚子'],
     rewardText: '蓝柚子',
   },
   {
     key: '柚子橘暖20',
-    label: '7.25 橘暖池满 20 抽',
+    label: '攻玉杀青 橘暖池满 20 抽',
     rewards: ['蓝柚子', '绿柚子'],
     rewardText: '蓝柚子 + 绿柚子',
   },
@@ -1676,7 +1676,7 @@ function openYuzuConfirm() {
     </label>`,
   ).join('');
   document.getElementById('extraModalBody').innerHTML = `
-    <div class="bm-sub">7 月 25 日当天是否分别在夏日池 / 橘暖池抽满对应次数？按实际情况勾选（可多选）：</div>
+    <div class="bm-sub">7.25-7.27是否分别在夏日池 / 橘暖池抽满对应次数？按实际情况勾选（可多选）：</div>
     <div class="extra-opts">${opts}</div>`;
   document.getElementById('extraModal').style.display = 'flex';
 }
@@ -4005,7 +4005,9 @@ async function refreshAccountStock(id) {
   renderCollection();
   if (currentTab === 'entry') renderEntry();
   renderAccountList();
-  showToast(`✅ 已刷新「${acc.name}」的库存（双池 ${accountTotalDraws(acc)} 张）`);
+  showToast(
+    `✅ 已刷新「${acc.name}」的库存（双池 ${accountTotalDraws(acc)} 张）`,
+  );
 }
 async function deleteAccount(id) {
   if (!accounts[id]) return;
@@ -4099,12 +4101,49 @@ function parsePhones(text) {
   return out;
 }
 // 批量导入入口（通知弹窗）：逐号查询，按号建/换账号并替换库存
+// 公告弹窗：多号码独立输入框（手机数字键盘没有标点，逐框输入更友好）
+let stockPhoneRows = 1;
+function renderStockPhoneRows() {
+  const wrap = document.getElementById('stockPhoneList');
+  if (!wrap) return;
+  let html = '';
+  for (let i = 0; i < stockPhoneRows; i++) {
+    const el = document.getElementById('stockPhone' + i);
+    const val = el && el.value ? String(el.value).replace(/"/g, '') : '';
+    html += `<div class="stock-phone-row">
+      <input type="tel" inputmode="numeric" maxlength="11" id="stockPhone${i}" class="stock-phone-input" placeholder="下单手机号 ${i + 1}" value="${val}">
+      ${stockPhoneRows > 1 ? `<button class="acc-mini danger stock-phone-del" onclick="removeStockPhoneRow(${i})" title="删除此行">✕</button>` : ''}
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+function addStockPhoneRow() {
+  stockPhoneRows++;
+  renderStockPhoneRows();
+  const el = document.getElementById('stockPhone' + (stockPhoneRows - 1));
+  if (el && el.focus) el.focus();
+}
+function removeStockPhoneRow(idx) {
+  if (stockPhoneRows <= 1) return;
+  // 后面的行依次前移，再删掉末行
+  for (let j = idx; j < stockPhoneRows - 1; j++) {
+    const next = document.getElementById('stockPhone' + (j + 1));
+    document.getElementById('stockPhone' + j).value = next ? next.value : '';
+  }
+  stockPhoneRows--;
+  renderStockPhoneRows();
+}
 async function importStockFromNotice() {
-  const textarea = document.getElementById('stockPhones');
   const statusEl = document.getElementById('stockImportStatus');
   const btn = document.getElementById('stockImportBtn');
-  if (!textarea || !btn) return;
-  const phones = parsePhones(textarea.value);
+  if (!btn) return;
+  // 逐输入框收集（单框内粘贴含分隔符的多个号码仍兼容），跨框去重
+  const collected = [];
+  for (let i = 0; i < stockPhoneRows; i++) {
+    const el = document.getElementById('stockPhone' + i);
+    if (el && el.value) collected.push(...parsePhones(el.value));
+  }
+  const phones = [...new Set(collected)];
   if (phones.length === 0) {
     if (statusEl) statusEl.textContent = '';
     showToast('⚠️ 请先输入手机号');
@@ -4277,6 +4316,7 @@ const NOTICE_VERSION = '2.0'; // 更新此版本号会让弹窗重新弹出
     document.getElementById('noticeModal').style.display = 'flex';
   }
 })();
+renderStockPhoneRows(); // 公告弹窗多号码输入框初始化
 function closeNotice(dontRemind) {
   document.getElementById('noticeModal').style.display = 'none';
   if (dontRemind) {

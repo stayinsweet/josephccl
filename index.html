@@ -263,7 +263,8 @@
     </div>
     <div class="notice-update">
       <div class="notice-update-head">📦 导入真实库存</div>
-      <textarea id="stockPhones" class="import-textarea" style="min-height:72px;font-family:inherit;" inputmode="numeric" placeholder="输入下单手机号，多个用换行、逗号或空格分隔&#10;如：13800000001，13900000002"></textarea>
+      <div id="stockPhoneList"></div>
+      <button class="btn btn-outline" style="width:100%;" onclick="addStockPhoneRow()">➕ 添加一个号码</button>
       <div id="stockImportStatus" style="font-size:11px;color:var(--brown-200);margin-top:6px;min-height:15px;"></div>
       <button class="btn btn-primary" id="stockImportBtn" style="width:100%;margin-top:8px;" onclick="importStockFromNotice()">🔍 查询并导入库存</button>
     </div>
