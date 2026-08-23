@@ -3033,6 +3033,15 @@ async function exportOpData() {
     accountName: accName,
   };
   if (isWish) data.wishLimit = wishLimit;
+  // 附上手机号清单：总账号=所有账号绑定号码 / 单账号=该账号号码（未绑号则省略）
+  if (isMergedView()) {
+    data.phones = accountOrder
+      .map(id => (accounts[id] && accounts[id].phone) || '')
+      .filter(Boolean);
+  } else {
+    const ph = activeAccount() ? activeAccount().phone : '';
+    if (ph) data.phones = [ph];
+  }
   const json = JSON.stringify(data);
   // 往记录页生成一条导出记录（合并视图下写入首个账号以持久化，聚合视图同步显示）
   const entry = {
