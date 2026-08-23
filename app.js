@@ -3841,7 +3841,7 @@ function renderAccountList() {
     <span class="acc-name">🌐 全部账号（合并）</span>
     <span class="acc-sub">只读汇总</span>
   </div>`;
-  accountOrder.forEach((id, i) => {
+  accountOrder.forEach(id => {
     const a = accounts[id];
     if (!a) return;
     const nameEsc = escapeHtml(a.name);
@@ -3850,12 +3850,16 @@ function renderAccountList() {
     const phoneBtn = isStockMode()
       ? `<button class="acc-mini wide" onclick="changeAccountPhone('${id}')" title="${a.phone ? '修改' : '绑定'}手机号">${a.phone ? '改号' : '绑号'}</button>`
       : '';
+    // 已绑号账号：一键重新查询该号码的远程库存
+    const refreshBtn =
+      isStockMode() && a.phone
+        ? `<button class="acc-mini wide" onclick="refreshAccountStock('${id}')" title="重新查询该号码库存">刷新</button>`
+        : '';
     html += `<div class="acc-row ${id === activeAccountId ? 'active' : ''}">
       <span class="acc-name" onclick="selectAccount('${id}')">${nameEsc}${phoneTag}</span>
       <div class="acc-actions">
         ${phoneBtn}
-        <button class="acc-mini" onclick="moveAccount('${id}',-1)" ${i === 0 ? 'disabled' : ''}>↑</button>
-        <button class="acc-mini" onclick="moveAccount('${id}',1)" ${i === accountOrder.length - 1 ? 'disabled' : ''}>↓</button>
+        ${refreshBtn}
         <button class="acc-mini" onclick="renameAccount('${id}')">✏️</button>
         <button class="acc-mini danger" onclick="deleteAccount('${id}')">🗑</button>
       </div>
@@ -3976,6 +3980,33 @@ async function changeAccountPhone(id) {
     `✅ 已改绑 ${phoneMask(input)} 并更新库存（双池 ${totalDraws()} 张）`,
   );
 }
+// 库存模式：按已绑手机号重新查询远程库存并覆盖本地（不改变绑定）
+async function refreshAccountStock(id) {
+  if (!isStockMode()) return;
+  const acc = accounts[id];
+  if (!acc) return;
+  if (!acc.phone) {
+    showToast('⚠️ 该账号未绑定手机号，请先「绑号」');
+    return;
+  }
+  showToast('🔍 正在查询远程库存...');
+  const counts = await fetchStockByPhone(acc.phone);
+  if (!counts) {
+    showToast('⚠️ 未查到 ' + phoneMask(acc.phone) + ' 的库存');
+    return;
+  }
+  acc.cardCounts = counts;
+  // 激活账号的 cardCounts 引用被替换：先重载全局再保存，防止旧引用回写
+  if (isMergedView()) computeMergedGlobals();
+  else if (activeAccountId === id) loadActiveAccountIntoGlobals();
+  saveData();
+  updateStats();
+  renderPanels();
+  renderCollection();
+  if (currentTab === 'entry') renderEntry();
+  renderAccountList();
+  showToast(`✅ 已刷新「${acc.name}」的库存（双池 ${accountTotalDraws(acc)} 张）`);
+}
 async function deleteAccount(id) {
   if (!accounts[id]) return;
   if (accountOrder.length <= 1) {
@@ -4009,22 +4040,6 @@ async function deleteAccount(id) {
   renderAccountList();
   showToast('🗑 已删除账号');
 }
-function moveAccount(id, dir) {
-  const i = accountOrder.indexOf(id);
-  const j = i + dir;
-  if (j < 0 || j >= accountOrder.length) return;
-  [accountOrder[i], accountOrder[j]] = [accountOrder[j], accountOrder[i]];
-  saveData();
-  if (isMergedView()) {
-    computeMergedGlobals();
-    updateStats();
-    renderPanels();
-    renderCollection();
-    if (currentTab === 'history') renderHistory();
-  }
-  renderAccountList();
-}
-
 // ==================== IMAGE API ====================
 function setCardImage(pool, id, frontBase64, backBase64) {
   if (!cardImages[pool]) cardImages[pool] = {};
