@@ -260,7 +260,8 @@ function rewardImg(name) {
     ? '全员满赠'
     : name.startsWith('限时') ||
         name.startsWith('宣传') ||
-        YUZU_REWARDS.includes(name)
+        YUZU_REWARDS.includes(name) ||
+        PURGE_BONUS_REWARDS.includes(name)
       ? '额外奖励'
       : '个人满赠';
   return `images/${dir}/${REWARD_IMGS[name] || name}.jpg`;
@@ -301,6 +302,8 @@ let extraRewards = {
   柚子夏日20: false,
   柚子橘暖10: false,
   柚子橘暖20: false,
+  消除满5: false,
+  消除满15: false,
 };
 
 // 多账号：accounts = { id: {name, cardCounts, history, cardImages, extraRewards} }
@@ -323,6 +326,8 @@ function emptyAccountData() {
       柚子夏日20: false,
       柚子橘暖10: false,
       柚子橘暖20: false,
+      消除满5: false,
+      消除满15: false,
     },
   };
 }
@@ -336,6 +341,8 @@ function defaultExtraRewards() {
     柚子夏日20: false,
     柚子橘暖10: false,
     柚子橘暖20: false,
+    消除满5: false,
+    消除满15: false,
   };
 }
 
@@ -692,17 +699,56 @@ function yuzuUnlocked(name) {
 function yuzuUnlockedCount() {
   return YUZU_REWARDS.filter(name => yuzuUnlocked(name)).length;
 }
-// 额外奖励已解锁总数（限时 + 宣传 + 柚子）
+// 一键消除礼：使用「一键保留」消除的卡牌张数分档，用户自确认（满5 / 满15 两档，满15 含满5）
+const PURGE_BONUS_REWARDS = ['消除5', '消除15'];
+const PURGE_BONUS_CARD_TIERS = {
+  消除5: '一键消除 ≥ 5 张',
+  消除15: '一键消除 ≥ 15 张',
+};
+const PURGE_BONUS_TIERS = [
+  {
+    key: '消除满5',
+    label: '一键消除满 5 张',
+    rewards: ['消除5'],
+    rewardText: '消除5',
+  },
+  {
+    key: '消除满15',
+    label: '一键消除满 15 张',
+    rewards: ['消除5', '消除15'],
+    rewardText: '消除5 + 消除15',
+  },
+];
+// 是否勾选过任一消除档位
+function purgeBonusConfirmed() {
+  return PURGE_BONUS_TIERS.some(t => !!extraRewards[t.key]);
+}
+// 消除奖励卡是否解锁（对应档位已自确认）
+function purgeBonusUnlocked(name) {
+  return PURGE_BONUS_TIERS.some(
+    t => !!extraRewards[t.key] && t.rewards.includes(name),
+  );
+}
+// 一键消除礼已解锁卡数（0-2）
+function purgeBonusUnlockedCount() {
+  return PURGE_BONUS_REWARDS.filter(name => purgeBonusUnlocked(name)).length;
+}
+// 额外奖励已解锁总数（限时 + 宣传 + 柚子 + 消除）
 function extraUnlockedCount() {
   if (isMergedView()) {
     const c = mergedUnlockedByCategory();
-    return c.limited.size + c.promo.size + c.yuzu.size;
+    return (
+      c.limited.size + c.promo.size + c.yuzu.size + c.purgeBonus.size
+    );
   }
   return (
-    limitedUnlockedCount() + (promoUnlocked() ? 1 : 0) + yuzuUnlockedCount()
+    limitedUnlockedCount() +
+    (promoUnlocked() ? 1 : 0) +
+    yuzuUnlockedCount() +
+    purgeBonusUnlockedCount()
   );
 }
-const EXTRA_TOTAL = 8; // 限时3 + 宣传1 + 柚子4
+const EXTRA_TOTAL = 10; // 限时3 + 宣传1 + 柚子4 + 消除2
 
 // ==================== 多账号：按账号计算奖励解锁（纯函数，不碰全局）====================
 function accountTotalDraws(acc) {
@@ -758,9 +804,15 @@ function accountUnlockedByCategory(acc) {
     if (acc.extraRewards && acc.extraRewards[t.key])
       t.rewards.forEach(n => yuzu.add(n));
   }
-  return { personal, global, limited, promo, yuzu };
+  // 一键消除礼：账号自确认的两档
+  const purgeBonus = new Set();
+  for (const t of PURGE_BONUS_TIERS) {
+    if (acc.extraRewards && acc.extraRewards[t.key])
+      t.rewards.forEach(n => purgeBonus.add(n));
+  }
+  return { personal, global, limited, promo, yuzu, purgeBonus };
 }
-// 合并视图：各账号四类取并集
+// 合并视图：各账号各类取并集
 function mergedUnlockedByCategory() {
   const agg = {
     personal: new Set(),
@@ -768,6 +820,7 @@ function mergedUnlockedByCategory() {
     limited: new Set(),
     promo: new Set(),
     yuzu: new Set(),
+    purgeBonus: new Set(),
   };
   for (const id of accountOrder) {
     const acc = accounts[id];
@@ -785,6 +838,7 @@ function mergedUnlockedSet() {
     ...c.limited,
     ...c.promo,
     ...c.yuzu,
+    ...c.purgeBonus,
   ]);
 }
 // 任一账号该确认字段为真
@@ -984,6 +1038,14 @@ function buildRewardCards() {
         unlocked: cat.yuzu.has(name),
       }),
     );
+    PURGE_BONUS_REWARDS.forEach(name =>
+      list.push({
+        name,
+        source: '一键消除',
+        tier: PURGE_BONUS_CARD_TIERS[name],
+        unlocked: cat.purgeBonus.has(name),
+      }),
+    );
     return list;
   }
   // 单账号视图
@@ -1041,6 +1103,14 @@ function buildRewardCards() {
       source: '柚子限时礼',
       tier: YUZU_CARD_TIERS[name],
       unlocked: yuzuUnlocked(name),
+    }),
+  );
+  PURGE_BONUS_REWARDS.forEach(name =>
+    list.push({
+      name,
+      source: '一键消除',
+      tier: PURGE_BONUS_CARD_TIERS[name],
+      unlocked: purgeBonusUnlocked(name),
     }),
   );
   return list;
@@ -1143,6 +1213,14 @@ function renderRewardPool() {
   }));
   const yUnlocked = yuzuCards.filter(c => c.unlocked).length;
   const yConfirmed = yuzuConfirmed();
+  // 一键消除
+  const pbCards = PURGE_BONUS_REWARDS.map(name => ({
+    name,
+    tier: PURGE_BONUS_CARD_TIERS[name],
+    unlocked: purgeBonusUnlocked(name),
+  }));
+  const pbUnlocked = pbCards.filter(c => c.unlocked).length;
+  const pbConfirmed = purgeBonusConfirmed();
 
   const renderConfirmGroup = (
     title,
@@ -1179,6 +1257,7 @@ function renderRewardPool() {
     ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
     ${renderConfirmGroup('宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
     ${renderConfirmGroup('柚子限时礼', `${yUnlocked}/4`, yuzuCards, 'rw-yuzu', yConfirmed, 'openYuzuConfirm()')}
+    ${renderConfirmGroup('一键消除', `${pbUnlocked}/2`, pbCards, 'rw-purge-bonus', pbConfirmed, 'openPurgeBonusConfirm()')}
   `;
 }
 
@@ -1262,6 +1341,16 @@ function renderRewardPoolMerged(panel) {
   }));
   const yUnlocked = cat.yuzu.size;
   const yConfirmed = YUZU_TIERS.some(t => anyAccountExtraConfirmed(t.key));
+  // 一键消除（各账号解锁取并集）
+  const pbCards = PURGE_BONUS_REWARDS.map(name => ({
+    name,
+    tier: PURGE_BONUS_CARD_TIERS[name],
+    unlocked: cat.purgeBonus.has(name),
+  }));
+  const pbUnlocked = cat.purgeBonus.size;
+  const pbConfirmed = PURGE_BONUS_TIERS.some(t =>
+    anyAccountExtraConfirmed(t.key),
+  );
 
   const renderConfirmGroup = (
     title,
@@ -1298,6 +1387,7 @@ function renderRewardPoolMerged(panel) {
     ${renderConfirmGroup('限时礼', `${lUnlocked}/3`, limitedCards, 'rw-limited', lConfirmed, 'openLimitedConfirm()')}
     ${renderConfirmGroup('宣传礼', `${rUnlocked}/1`, promoCards, 'rw-promo', rConfirmed, 'openPromoConfirm()')}
     ${renderConfirmGroup('柚子限时礼', `${yUnlocked}/4`, yuzuCards, 'rw-yuzu', yConfirmed, 'openYuzuConfirm()')}
+    ${renderConfirmGroup('一键消除', `${pbUnlocked}/2`, pbCards, 'rw-purge-bonus', pbConfirmed, 'openPurgeBonusConfirm()')}
   `;
 }
 
@@ -1310,7 +1400,7 @@ function renderOverview() {
   const poolTotal = poolTotalCount();
   const rewardUnlocked =
     personalUnlockedCount() + globalUnlockedCount() + extraUnlockedCount();
-  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length + EXTRA_TOTAL; // 24 + 9 + 8 = 41
+  const rewardTotal = PERSONAL_BONUS_TOTAL + GLOBAL_BONUS.length + EXTRA_TOTAL; // 24 + 9 + 10 = 43
 
   const poolPct = poolTotal ? Math.round((collected / poolTotal) * 100) : 0;
   const rewardPct = Math.round((rewardUnlocked / rewardTotal) * 100);
@@ -1334,7 +1424,7 @@ function renderOverview() {
         <div class="ov-num">${rewardUnlocked}<span class="ov-slash">/${rewardTotal}</span></div>
         <div class="ov-bar-wrap"><div class="ov-bar reward" style="width:${rewardPct}%"></div></div>
         <div class="ov-pct">${rewardPct}%</div>
-        <div class="ov-note">含满赠 + 限时礼 + 宣传礼 + 柚子礼</div>
+        <div class="ov-note">含满赠 + 限时礼 + 宣传礼 + 柚子礼 + 消除礼</div>
       </div>
     </div>
   `;
@@ -1402,6 +1492,15 @@ function overviewCards() {
       img: rewardImg(name),
       owned: yuzuUnlocked(name),
       sub: '柚子限时礼',
+    }),
+  );
+  // 一键消除
+  PURGE_BONUS_REWARDS.forEach(name =>
+    list.push({
+      name,
+      img: rewardImg(name),
+      owned: purgeBonusUnlocked(name),
+      sub: '一键消除',
     }),
   );
   return list;
@@ -1610,10 +1709,16 @@ function openBonusDetail(type) {
 }
 function closeBonusModal() {
   document.getElementById('bonusModal').style.display = 'none';
+  // 从「导出提示弹窗」打开的图鉴：关闭后返回提示弹窗（登记入口不丢失）
+  if (opResultReturnIdx >= 0 && history[opResultReturnIdx]) {
+    const idx = opResultReturnIdx;
+    opResultReturnIdx = -1;
+    showOpResultModal(history[idx]);
+  }
 }
 
 // ==================== 额外奖励确认（限时礼 / 宣传礼）====================
-let extraModalMode = null; // 'limited' | 'promo' | 'yuzu'
+let extraModalMode = null; // 'limited' | 'promo' | 'yuzu' | 'purgeBonus'
 const LIMITED_TIERS = [
   { key: '0-2', label: '开售 0-2 小时', rewards: '限时卡1、2、3' },
   { key: '3-6', label: '开售 3-6 小时', rewards: '限时卡1、2' },
@@ -1681,6 +1786,27 @@ function openYuzuConfirm() {
   document.getElementById('extraModal').style.display = 'flex';
 }
 
+function openPurgeBonusConfirm() {
+  if (isMergedView()) {
+    showToast('请先选择具体账号');
+    return;
+  }
+  extraModalMode = 'purgeBonus';
+  const cur = extraRewards;
+  document.getElementById('extraModalTitle').textContent = '一键消除';
+  const opts = PURGE_BONUS_TIERS.map(
+    (t, i) => `
+    <label class="extra-opt ${cur[t.key] ? 'active' : ''}" data-val="pb${i}">
+      <input type="checkbox" id="purgeBonusOpt${i}" ${cur[t.key] ? 'checked' : ''}>
+      <div class="extra-opt-main"><div class="extra-opt-label">${t.label}</div><div class="extra-opt-sub">送 ${t.rewardText}</div></div>
+    </label>`,
+  ).join('');
+  document.getElementById('extraModalBody').innerHTML = `
+    <div class="bm-sub">使用「一键保留」消除的卡牌张数是否达到以下档位？按实际情况勾选（可多选）：</div>
+    <div class="extra-opts">${opts}</div>`;
+  document.getElementById('extraModal').style.display = 'flex';
+}
+
 function confirmExtraModal() {
   if (isMergedView()) {
     showToast('请先选择具体账号');
@@ -1694,6 +1820,11 @@ function confirmExtraModal() {
   } else if (extraModalMode === 'yuzu') {
     YUZU_TIERS.forEach((t, i) => {
       const el = document.getElementById('yuzuOpt' + i);
+      extraRewards[t.key] = !!(el && el.checked);
+    });
+  } else if (extraModalMode === 'purgeBonus') {
+    PURGE_BONUS_TIERS.forEach((t, i) => {
+      const el = document.getElementById('purgeBonusOpt' + i);
       extraRewards[t.key] = !!(el && el.checked);
     });
   }
@@ -2926,6 +3057,63 @@ async function exportOpData() {
   renderHistory();
   // 退出操作模式（purge 恢复原始数据，默认不覆盖）
   finishOpMode();
+  // 导出/提交后弹出提示弹窗（复制 / 图鉴 / 登记）
+  showOpResultModal(entry);
+}
+// ==================== 导出结果弹窗（保留/许愿提交后提示 + 登记） ====================
+// 📝 登记表单链接：一键保留与许愿卡地址不同，分别在此补全（「去登记」按钮新窗口打开）
+const PURGE_REGISTER_URL = 'https://s.qun100.com/link/aiDTv5yHz9b'; // 一键保留登记
+const WISH_REGISTER_URL = 'https://s.qun100.com/link/ajPn1Oneyaa'; // TODO: 许愿卡登记链接，请手动补全
+let opResultIdx = -1; // 弹窗当前对应的记录下标
+let opResultReturnIdx = -1; // 从提示弹窗打开图鉴时记录下标，关闭图鉴后返回提示弹窗
+let opResultIsWish = false; // 当前弹窗对应类型（决定「去登记」跳哪个地址）
+function showOpResultModal(entry) {
+  if (!entry) return;
+  const idx = history.indexOf(entry);
+  if (idx < 0) return;
+  opResultIdx = idx;
+  const isWish = entry.type === 'wish';
+  opResultIsWish = !!isWish;
+  document.getElementById('opResultTitle').textContent = isWish
+    ? '🌟 许愿卡已提交'
+    : '📤 一键保留已导出';
+  const accTag = entry.accountName
+    ? `（账号：${escapeHtml(entry.accountName)}）`
+    : '';
+  document.getElementById('opResultBody').innerHTML =
+    `数据已复制到剪切板，并写入「记录」页${accTag}。`;
+  document.getElementById('opResultViewBtn').textContent = isWish
+    ? '📖 查看许愿清单'
+    : '📖 查看保留图鉴';
+  document.getElementById('opResultModal').style.display = 'flex';
+}
+function closeOpResultModal() {
+  const el = document.getElementById('opResultModal');
+  if (el) el.style.display = 'none';
+  opResultIdx = -1;
+}
+// 复制弹窗对应记录的完整 JSON（同记录页「复制完整数据」）
+function copyOpResultJson() {
+  if (opResultIdx < 0) return;
+  copyPurgeJson(opResultIdx);
+}
+// 查看弹窗对应记录的图鉴/清单（同记录页按钮），打开前先关提示弹窗，关闭图鉴后回到提示弹窗
+function viewOpResultCollection() {
+  if (opResultIdx < 0) return;
+  const idx = opResultIdx;
+  if (!history[idx] || !history[idx].json) return;
+  opResultReturnIdx = idx;
+  closeOpResultModal();
+  viewPurgeCollection(idx);
+}
+// 登记：新窗口打开登记表单（保留/许愿地址不同，按当前弹窗类型跳转）
+function openRegisterUrl() {
+  const url = opResultIsWish ? WISH_REGISTER_URL : PURGE_REGISTER_URL;
+  if (!url) {
+    showToast('⚠️ 登记链接未配置');
+    return;
+  }
+  window.open(url, '_blank');
 }
 // 复制文本到剪切板（带提示）
 function copyToClipboard(text, successMsg) {
@@ -4260,6 +4448,9 @@ function applyAppMode() {
   // 导入按钮：仅 manual 模式显示（库存模式数据随手机号同步，不走导入）
   const importBtn = document.getElementById('importBtn');
   if (importBtn) importBtn.style.display = stock ? 'none' : '';
+  // 清空按钮：仅 manual 模式显示（库存以远程同步为准，避免误清账号库存）
+  const clearBtn = document.getElementById('clearBtn');
+  if (clearBtn) clearBtn.style.display = stock ? 'none' : '';
   // OCR 依赖 tesseract.js（约 8MB 引擎+语言包按需拉取）：仅 manual 模式加载
   if (!stock && !document.getElementById('tesseractScript')) {
     const s = document.createElement('script');

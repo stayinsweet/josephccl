@@ -26,7 +26,7 @@
       <button class="header-btn" id="modeToggleBtn" onclick="toggleAppMode()">📦 库存</button>
       <button class="header-btn" onclick="exportData()">导出</button>
       <button class="header-btn" id="importBtn" onclick="importData()">导入</button>
-      <button class="header-btn danger" onclick="clearAllData()">清空</button>
+      <button class="header-btn danger" id="clearBtn" onclick="clearAllData()">清空</button>
     </div>
   </header>
 
@@ -171,7 +171,7 @@
 </div>
 
 <!-- 悬浮抽奖入口（可拖动） -->
-<div class="float-draw" id="floatDraw" data-href="https://weidian.com/?userid=1372238443&p=iphone&wfr=BuyercopyURL&share_relation=e6570deea04fcace_1654664813_1">
+<div class="float-draw" id="floatDraw" style="display:none;" data-href="https://weidian.com/?userid=1372238443&p=iphone&wfr=BuyercopyURL&share_relation=e6570deea04fcace_1654664813_1">
   <button class="float-draw-close" id="floatDrawClose" onclick="closeFloatDraw(event)">✕</button>
   <div class="float-draw-circle"></div>
   <span class="float-draw-text">去抽一发</span>
@@ -199,6 +199,7 @@
 <!-- 满赠详情 Modal -->
 <div class="modal-overlay" id="bonusModal" style="display:none;" onclick="if(event.target===this)closeBonusModal()">
   <div class="modal-sheet">
+    <button class="modal-close sticky-close" onclick="closeBonusModal()">✕</button>
     <div class="modal-handle"></div>
     <div class="bonus-modal-title" id="bonusModalTitle">满赠详情</div>
     <div id="bonusModalBody"></div>
@@ -317,6 +318,20 @@
       <button class="btn btn-outline" style="flex:1;" onclick="closePromptModal(null)">取消</button>
       <button class="btn btn-primary" style="flex:1;" onclick="closePromptModal(document.getElementById('promptInput').value)">确定</button>
     </div>
+  </div>
+</div>
+
+<!-- 保留/许愿导出结果 Modal（复制 / 查看图鉴 / 登记） -->
+<div class="modal-overlay" id="opResultModal" style="display:none;" onclick="if(event.target===this)closeOpResultModal()">
+  <div class="modal-sheet">
+    <button class="modal-close" onclick="closeOpResultModal()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="bonus-modal-title" id="opResultTitle">导出成功</div>
+    <div id="opResultBody" style="font-size:13px;color:var(--brown-600);line-height:1.7;"></div>
+    <button class="btn btn-outline" style="width:100%;margin-top:14px;" onclick="copyOpResultJson()">📋 复制完整数据</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px;" id="opResultViewBtn" onclick="viewOpResultCollection()">📖 查看保留图鉴</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="openRegisterUrl()">📝 去登记</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px;" onclick="closeOpResultModal()">关闭</button>
   </div>
 </div>
 

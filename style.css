@@ -300,6 +300,7 @@ html, body {
 .reward-cell.unlocked.rw-limited { background: #E8F8E8; border-color: #8AB860; }
 .reward-cell.unlocked.rw-promo { background: var(--orange-100); border-color: var(--orange-400); }
 .reward-cell.unlocked.rw-yuzu { background: #F0F7E8; border-color: #B5CC7A; }
+.reward-cell.unlocked.rw-purge-bonus { background: #EDF1FB; border-color: #9BB0E4; }
 .reward-ph-wrap { width: 100%; aspect-ratio: 1; border-radius: 8px; margin-bottom: 4px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; background: var(--orange-100); }
 .reward-ph-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .reward-ph-wrap img.locked-img { opacity: 0.4; }
@@ -602,6 +603,8 @@ html, body {
   z-index: 5; font-family: inherit;
 }
 .modal-close:active { background: var(--orange-200); transform: scale(0.9); }
+/* 长内容弹窗（保留图鉴等）用粘性关闭按钮：滚动时固定在右上角不随内容滚走 */
+.modal-close.sticky-close { position: sticky; top: 10px; right: 0; float: right; margin: 0 0 8px 8px; }
 .modal-card-preview { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 16px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .modal-nav {
   flex: 0 0 auto; width: 36px; height: 36px; border: none; border-radius: 50%;
