@@ -199,7 +199,6 @@ html, body {
 
 /* 总统计 */
 .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.overview-grid .ov-card:first-child { grid-column: 1 / -1; }
 .ov-card { background: var(--orange-50); border-radius: 12px; padding: 12px; min-width: 0; }
 .ov-label { font-size: 11px; color: var(--brown-200); margin-bottom: 4px; }
 .ov-num { font-size: 26px; font-weight: 800; color: var(--brown-900); line-height: 1.1; }
