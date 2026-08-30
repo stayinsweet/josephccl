@@ -2953,7 +2953,7 @@ function applyPurgeQuick() {
       cardCounts[pool][card.id] = cur < n ? cur : n;
     }
   }
-  saveData();
+  // 保留期间不落盘：快捷应用只改内存，导出/取消时随快照恢复统一持久化
   renderEntry();
   updateStats();
   renderPanels();
@@ -3070,7 +3070,10 @@ async function exportOpData() {
     saveData(); // 合并视图全局不写穿，直接持久化账号存储
   } else {
     history.unshift(entry);
-    saveData(); // 单账号视图：写入该账号并持久化（许愿无快照恢复，需在此落盘）
+    // 许愿不修改库存，可直接落盘；
+    // 一键保留此时 cardCounts 仍是保留数据，绝不在此落盘——
+    // 等 finishOpMode 恢复原库存后一次性持久化（记录+原库存同写，无中间态）
+    if (isWish) saveData();
   }
   copyToClipboard(json, '✅ 已生成记录并复制到剪切板');
   renderHistory();
@@ -3378,7 +3381,9 @@ function adjustEntry(id, delta) {
       });
     }
   }
-  saveData();
+  // 一键保留期间改动只存内存：快照恢复前不落盘，
+  // 防止页面中途被杀（如跳去登记后标签页被回收）时保留数据写穿真实库存
+  if (opMode !== 'purge') saveData();
   // 局部更新：只改这一张卡 + 它所在组的计数，不重建整网格
   updateEntryCell(id);
   updateGroupCount(groupKeyOf(card));
@@ -3440,7 +3445,8 @@ function setEntryCount(id, val) {
       type,
     });
   }
-  saveData();
+  // 一键保留期间不落盘（同 adjustEntry，导出/取消时统一持久化）
+  if (opMode !== 'purge') saveData();
   updateEntryCell(id);
   updateGroupCount(groupKeyOf(card));
   updateStats();
