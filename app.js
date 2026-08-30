@@ -3125,9 +3125,9 @@ function viewOpResultCollection() {
   closeOpResultModal();
   viewPurgeCollection(idx);
 }
-// 登记：新窗口打开登记表单（保留/许愿地址不同，按当前弹窗类型跳转）
-function openRegisterUrl() {
-  const url = opResultIsWish ? WISH_REGISTER_URL : PURGE_REGISTER_URL;
+// 登记：新窗口打开登记表单（保留/许愿地址不同；记录页按记录类型显式传参，弹窗用当前类型）
+function openRegisterUrl(isWish = opResultIsWish) {
+  const url = isWish ? WISH_REGISTER_URL : PURGE_REGISTER_URL;
   if (!url) {
     showToast('⚠️ 登记链接未配置');
     return;
@@ -3575,17 +3575,33 @@ function renderHistory() {
             : '📤 一键保留导出';
         // 标注来源账号（单账号名 / 总账号），便于合并视图下区分
         const accTag = it.accountName ? ` · ${it.accountName}` : '';
-        const preview =
-          it.json.length > 120 ? it.json.slice(0, 120) + '...' : it.json;
+        // 长数据默认截断，可展开完整 JSON 手动选择复制
+        const idx = history.indexOf(it);
+        const expanded = expandedPurgeIdx === idx;
+        const long = it.json.length > 120;
+        const jsonText = expanded
+          ? it.json
+          : long
+            ? it.json.slice(0, 120) + '...'
+            : it.json;
+        const toggleBtn = long
+          ? `<button class="purge-toggle" onclick="togglePurgeJson(${idx})">${expanded ? '▴ 收起' : '▾ 展开全部数据'}</button>`
+          : '';
         const applyBtn = isExport
           ? ''
           : `<button class="btn btn-sm btn-outline purge-apply" onclick="viewPurgeCollection(${history.indexOf(it)})">📖 ${isWish ? '查看许愿清单' : '查看保留图鉴'}</button>`;
+        // 登记入口：按记录类型跳对应登记地址（保留/许愿地址不同；旧全量导出不带）
+        const regBtn = isExport
+          ? ''
+          : `<button class="btn btn-sm btn-outline" onclick="openRegisterUrl(${it.type === 'wish'})">📝 去登记</button>`;
         return `<div class="history-item purge-item">
           <div class="history-header"><span class="history-pool">${title}${accTag}</span><span class="history-time">${ts}</span></div>
-          <div class="purge-json">${preview}</div>
+          <div class="purge-json${expanded ? ' expanded' : ''}">${jsonText}</div>
+          ${toggleBtn}
           <div class="purge-actions">
             <button class="btn btn-sm btn-outline purge-copy" onclick="copyPurgeJson(${history.indexOf(it)})">📋 复制完整数据</button>
             ${applyBtn}
+            ${regBtn}
           </div>
         </div>`;
       }
@@ -3621,6 +3637,12 @@ function renderHistory() {
     </div>`;
     })
     .join('');
+}
+// 展开收起某条 purge/许愿记录的完整 JSON（便于手动选择复制粘贴）
+let expandedPurgeIdx = -1;
+function togglePurgeJson(idx) {
+  expandedPurgeIdx = expandedPurgeIdx === idx ? -1 : idx;
+  renderHistory();
 }
 // 复制某条 purge 记录的完整 JSON
 function copyPurgeJson(idx) {

@@ -550,6 +550,8 @@ html, body {
 .history-item { background: var(--white); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
 .purge-item { border: 1.5px solid var(--orange-300); }
 .purge-json { font-size: 10px; color: var(--brown-200); background: var(--orange-50); border-radius: 8px; padding: 8px 10px; margin: 8px 0; word-break: break-all; line-height: 1.5; font-family: ui-monospace, Menlo, monospace; max-height: 80px; overflow: hidden; }
+.purge-json.expanded { max-height: none; overflow: visible; -webkit-user-select: text; user-select: text; color: var(--brown-600); }
+.purge-toggle { border: none; background: none; color: var(--orange-600); font-size: 11px; padding: 0 2px; cursor: pointer; font-family: inherit; }
 .purge-actions { display: flex; gap: 8px; margin-top: 4px; }
 .purge-actions .btn { flex: 1; }
 .purge-view-pool { font-size: 14px; font-weight: 700; color: var(--orange-600); margin: 12px 0 6px; }
