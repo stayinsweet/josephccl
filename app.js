@@ -3639,8 +3639,11 @@ function viewPurgeCollection(idx) {
           '<div style="font-size:12px;color:var(--brown-200);padding:8px 0;">无保留卡牌</div>';
         continue;
       }
-      // 按卡牌类型分组
-      for (const t of poolTypes(pool)) {
+      // 按卡牌类型分组（poolTypes 不含特典，特殊奖励单独追加一组）
+      const viewTypes = poolTypes(pool).concat(
+        POOLS[pool].specials.length ? ['特殊奖励'] : [],
+      );
+      for (const t of viewTypes) {
         const typeCards = poolCards(pool).filter(
           card => card.type === t && (c[card.id] || 0) > 0,
         );
@@ -3652,6 +3655,7 @@ function viewPurgeCollection(idx) {
           if (cnt === 0) continue;
           html += `<div class="purge-view-cell ${card.rarity}">
             <div class="purge-view-img"><img src="${card.img}" alt="${card.id}"></div>
+            ${card.rarity === 'ex' ? `<div class="purge-view-name">${card.name}</div>` : ''}
             <div class="purge-view-cnt">×${cnt}</div>
           </div>`;
         }
@@ -3686,6 +3690,14 @@ function viewPurgeCollection(idx) {
     });
     if (promoUnlocked())
       rewardItems.push({ displayName: '宣传卡', imgName: '宣传卡' });
+    YUZU_REWARDS.forEach(name => {
+      if (yuzuUnlocked(name))
+        rewardItems.push({ displayName: name, imgName: name });
+    });
+    PURGE_BONUS_REWARDS.forEach(name => {
+      if (purgeBonusUnlocked(name))
+        rewardItems.push({ displayName: name, imgName: name });
+    });
 
     if (rewardItems.length) {
       html += `<div class="purge-view-pool">🎁 已获得奖励卡牌（${rewardItems.length} 张）</div>`;
