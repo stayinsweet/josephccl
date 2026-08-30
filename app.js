@@ -548,6 +548,12 @@ function totalDraws() {
   }
   return total;
 }
+// 小卡池合计张数（仅随手机号库存同步，不参与满赠）
+function xiaokaTotalDraws() {
+  let total = 0;
+  for (const cnt of Object.values(cardCounts.xiaoka || {})) total += cnt;
+  return total;
+}
 // 双池合计去重收集数（不含 ex 特典卡）
 function collectedCount() {
   let count = 0;
@@ -1411,6 +1417,10 @@ function renderOverview() {
       <div class="ov-card">
         <div class="ov-label">双池总抽数</div>
         <div class="ov-num orange">${total}</div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-label">小卡池总数</div>
+        <div class="ov-num orange">${xiaokaTotalDraws()}</div>
       </div>
       <div class="ov-card">
         <div class="ov-label">双池图鉴总进度</div>
